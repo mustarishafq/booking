@@ -1,0 +1,92 @@
+import { Router } from 'express';
+import pool from '../db.js';
+import { requireAdmin } from '../middleware/auth.js';
+import { sendTestMail } from '../emailer.js';
+import { sendTestWA } from '../whatsapp.js';
+
+const router = Router();
+
+const EMAIL_KEYS = [
+  'email_enabled', 'smtp_host', 'smtp_port', 'smtp_secure', 'smtp_user', 'smtp_password', 'email_from',
+  'admin_email',
+  'notify_submitted', 'notify_rejected', 'notify_cancelled',
+];
+
+const WA_KEYS = [
+  'wa_enabled', 'wa_phone_id', 'wa_token', 'wa_api_version', 'wa_admin_phone',
+  'notify_wa_submitted', 'notify_wa_rejected', 'notify_wa_cancelled',
+];
+
+const ALLOWED_KEYS = [...EMAIL_KEYS, ...WA_KEYS];
+
+// GET /api/settings — load all settings (admin)
+router.get('/', requireAdmin, async (req, res) => {
+  try {
+    const [rows] = await pool.query('SELECT `key`, `value` FROM settings');
+    const result = {};
+    for (const row of rows) result[row.key] = row.value;
+    // Never expose secrets — return boolean presence flags instead
+    result.smtp_password_set = !!(result.smtp_password);
+    result.smtp_password = '';
+    result.wa_token_set = !!(result.wa_token);
+    result.wa_token = '';
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+});
+
+// PATCH /api/settings — upsert settings (admin)
+router.patch('/', requireAdmin, async (req, res) => {
+  try {
+    const updates = req.body;
+    const allowed = Object.keys(updates).filter(k => ALLOWED_KEYS.includes(k));
+    if (!allowed.length) return res.json({ ok: true });
+
+    for (const key of allowed) {
+      // Never overwrite secrets with an empty string — blank means "keep existing"
+      if ((key === 'smtp_password' || key === 'wa_token') && !updates[key]) continue;
+      await pool.query(
+        'INSERT INTO settings (`key`, `value`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `value` = VALUES(`value`)',
+        [key, String(updates[key])],
+      );
+    }
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+});
+
+// POST /api/settings/test-email — send a test email (admin)
+router.post('/test-email', requireAdmin, async (req, res) => {
+  try {
+    const { to } = req.body;
+    if (!to) return res.status(400).json({ message: 'Recipient email required' });
+    const result = await sendTestMail(to);
+    if (result.ok) {
+      res.json({ ok: true, message: `Test email sent to ${to}` });
+    } else {
+      res.status(500).json({ ok: false, message: result.error });
+    }
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+});
+
+// POST /api/settings/test-whatsapp — send a test WA message (admin)
+router.post('/test-whatsapp', requireAdmin, async (req, res) => {
+  try {
+    const { to } = req.body;
+    if (!to) return res.status(400).json({ message: 'Phone number required' });
+    const result = await sendTestWA(to);
+    if (result.ok) {
+      res.json({ ok: true, message: `Test message sent to ${to}` });
+    } else {
+      res.status(500).json({ ok: false, message: result.error });
+    }
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+});
+
+export default router;

@@ -1,0 +1,75 @@
+{
+  "name": "Booking",
+  "type": "object",
+  "properties": {
+    "resource_id": {
+      "type": "string"
+    },
+    "resource_name": {
+      "type": "string"
+    },
+    "resource_type": {
+      "type": "string"
+    },
+    "pricing_model": {
+      "type": "string",
+      "enum": [
+        "hourly",
+        "daily",
+        "flat"
+      ]
+    },
+    "title": {
+      "type": "string"
+    },
+    "start_time": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "end_time": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "confirmed",
+        "cancelled",
+        "completed",
+        "pending"
+      ],
+      "default": "confirmed"
+    },
+    "cost_cents": {
+      "type": "number"
+    },
+    "attendees": {
+      "type": "number"
+    },
+    "notes": {
+      "type": "string"
+    },
+    "is_recurring": {
+      "type": "boolean",
+      "default": false
+    },
+    "recurrence_group_id": {
+      "type": "string"
+    },
+    "recurrence_weeks": {
+      "type": "number"
+    },
+    "booked_by_email": {
+      "type": "string"
+    },
+    "booked_by_name": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "resource_id",
+    "start_time",
+    "end_time",
+    "title"
+  ]
+}

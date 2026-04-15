@@ -1,0 +1,64 @@
+{
+  "name": "Resource",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Resource name"
+    },
+    "resource_type": {
+      "type": "string",
+      "description": "Type of resource (e.g. Room, Car, Boat, Service, Equipment...)"
+    },
+    "description": {
+      "type": "string"
+    },
+    "capacity": {
+      "type": "number",
+      "description": "Max occupancy / seats (optional)"
+    },
+    "pricing_model": {
+      "type": "string",
+      "enum": [
+        "hourly",
+        "daily",
+        "flat"
+      ],
+      "default": "hourly",
+      "description": "How this resource is priced"
+    },
+    "rate": {
+      "type": "number",
+      "description": "Rate in dollars \u2014 per hour, per day, or flat fee depending on pricing_model"
+    },
+    "amenities": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Features / amenities"
+    },
+    "image_url": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "maintenance",
+        "inactive"
+      ],
+      "default": "active"
+    },
+    "location": {
+      "type": "string",
+      "description": "Physical location or identifier"
+    }
+  },
+  "required": [
+    "name",
+    "resource_type",
+    "rate",
+    "pricing_model"
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "name": "Transaction",
+  "type": "object",
+  "properties": {
+    "user_email": {
+      "type": "string",
+      "description": "User email"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "credit_purchase",
+        "booking_charge",
+        "refund",
+        "admin_adjustment"
+      ],
+      "description": "Transaction type"
+    },
+    "amount_cents": {
+      "type": "number",
+      "description": "Amount in cents (positive=credit, negative=debit)"
+    },
+    "balance_after_cents": {
+      "type": "number",
+      "description": "Balance after transaction in cents"
+    },
+    "description": {
+      "type": "string",
+      "description": "Transaction description"
+    },
+    "booking_id": {
+      "type": "string",
+      "description": "Related booking ID if applicable"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "completed",
+        "pending",
+        "failed"
+      ],
+      "default": "completed"
+    }
+  },
+  "required": [
+    "user_email",
+    "type",
+    "amount_cents"
+  ]
+}

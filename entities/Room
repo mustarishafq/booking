@@ -1,0 +1,62 @@
+{
+  "name": "Room",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Room name"
+    },
+    "description": {
+      "type": "string",
+      "description": "Room description"
+    },
+    "capacity": {
+      "type": "number",
+      "description": "Maximum number of people"
+    },
+    "hourly_rate": {
+      "type": "number",
+      "description": "Hourly rate in dollars"
+    },
+    "amenities": {
+      "type": "array",
+      "description": "List of amenities",
+      "items": {
+        "type": "string"
+      }
+    },
+    "image_url": {
+      "type": "string",
+      "description": "Room image URL"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "maintenance",
+        "inactive"
+      ],
+      "default": "active"
+    },
+    "floor": {
+      "type": "string",
+      "description": "Floor location"
+    },
+    "room_type": {
+      "type": "string",
+      "enum": [
+        "meeting",
+        "conference",
+        "workshop",
+        "studio",
+        "office"
+      ],
+      "default": "meeting"
+    }
+  },
+  "required": [
+    "name",
+    "capacity",
+    "hourly_rate"
+  ]
+}
