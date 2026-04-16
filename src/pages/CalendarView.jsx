@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ChevronLeft, ChevronRight, Calendar, CheckCircle2, Ban } from 'lucide-react';
+import { hasPermission } from '@/lib/permissions';
 import { 
   format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, 
   addDays, addMonths, subMonths, isSameMonth, isSameDay, isToday,
@@ -27,6 +28,7 @@ export default function CalendarView() {
   const { user } = useOutletContext();
   const queryClient = useQueryClient();
   const isAdmin = user?.role === 'admin';
+  const canViewAll = hasPermission(user, 'view_all_calendar_entries');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState(null);
   const [roomFilter, setRoomFilter] = useState('all');
@@ -169,7 +171,7 @@ export default function CalendarView() {
                       <Badge variant="outline" className={`text-xs ${statusColors[b.status]} border-0`}>
                         {b.status}
                       </Badge>
-                      {isAdmin && b.status === 'pending' && (
+                      {canViewAll && b.status === 'pending' && (
                         <div className="flex gap-1 pt-1">
                           <Button size="sm" variant="ghost" className="h-7 text-xs text-emerald-600 hover:text-emerald-700 px-2" onClick={() => handleApprove(b)}>
                             <CheckCircle2 className="w-3 h-3 mr-1" /> Approve

@@ -1,7 +1,7 @@
 import { db } from '@/api/base44Client';
 
 import React, { useState } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext, Navigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -25,6 +25,8 @@ export default function Credits() {
   const [customAmount, setCustomAmount] = useState('');
   const [adding, setAdding] = useState(false);
   const [success, setSuccess] = useState('');
+
+  if (user?.user_type === 'internal') return <Navigate to="/" replace />;
 
   const balance = user?.credit_balance_cents || 0;
 

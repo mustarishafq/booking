@@ -1,7 +1,7 @@
 import { db } from '@/api/base44Client';
 
 import React, { useState } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext, Navigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 
 import { Card } from '@/components/ui/card';
@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { format } from 'date-fns';
 import { ArrowUpRight, ArrowDownRight, Receipt } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { hasPermission } from '@/lib/permissions';
 
 const typeLabels = {
   credit_purchase: { label: 'Credit Purchase', color: 'bg-emerald-500/10 text-emerald-600' },
@@ -22,7 +23,10 @@ const typeLabels = {
 export default function Transactions() {
   const { user } = useOutletContext();
   const [typeFilter, setTypeFilter] = useState('all');
+  if (user?.user_type === 'internal') return <Navigate to="/" replace />;
+
   const isAdmin = user?.role === 'admin';
+  const canViewAll = hasPermission(user, 'view_all_transactions');
 
   const { data: transactions = [], isLoading } = useQuery({
     queryKey: ['transactions'],
@@ -30,7 +34,7 @@ export default function Transactions() {
   });
 
   const filtered = transactions
-    .filter(t => isAdmin || t.user_email === user?.email)
+    .filter(t => canViewAll || t.user_email === user?.email)
     .filter(t => typeFilter === 'all' || t.type === typeFilter);
 
   return (

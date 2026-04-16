@@ -19,6 +19,7 @@ import Transactions from '@/pages/Transactions';
 import Users from '@/pages/Users';
 import Settings from '@/pages/Settings';
 import Profile from '@/pages/Profile';
+import Roles from '@/pages/Roles';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -51,6 +52,7 @@ const AuthenticatedApp = () => {
         <Route path="/credits" element={<Credits />} />
         <Route path="/transactions" element={<Transactions />} />
         <Route path="/users" element={<Users />} />
+        <Route path="/roles" element={<Roles />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/profile" element={<Profile />} />
       </Route>

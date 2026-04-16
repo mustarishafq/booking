@@ -11,7 +11,12 @@ const safeUser = ({ password_hash, ...u }) => u;
 // GET /api/users — list all users (admin only)
 router.get('/', requireAdmin, async (req, res) => {
   try {
-    const [rows] = await pool.query('SELECT * FROM users ORDER BY created_at DESC');
+    const [rows] = await pool.query(`
+      SELECT u.*, r.name AS role_name, r.color AS role_color
+      FROM users u
+      LEFT JOIN roles r ON u.role_id = r.id
+      ORDER BY u.created_at DESC
+    `);
     res.json(rows.map(safeUser));
   } catch (e) {
     res.status(500).json({ message: e.message });

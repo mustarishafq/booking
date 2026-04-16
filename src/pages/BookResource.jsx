@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Loader2, AlertCircle, CheckCircle2, Building2 } from 'lucide-react';
 import { differenceInHours, differenceInCalendarDays, addWeeks } from 'date-fns';
 
 function calcCost(resource, start, end) {
@@ -100,10 +100,11 @@ export default function BookResource() {
     if (e <= s) { setError('End must be after start.'); return; }
 
     const isAdmin = user?.role === 'admin';
+    const isInternal = user?.user_type === 'internal';
     const balance = user?.credit_balance_cents || 0;
 
-    // Only check and deduct credits for admins (non-admins are pending until approved)
-    if (isAdmin && totalCost > balance) {
+    // Only check and deduct credits for external admins (internals are free, non-admins are pending until approved)
+    if (isAdmin && !isInternal && totalCost > balance) {
       setError(`Insufficient credits. Need RM${(totalCost / 100).toFixed(2)}, you have RM${(balance / 100).toFixed(2)}.`);
       return;
     }
@@ -144,7 +145,7 @@ export default function BookResource() {
         booked_by_name: user.full_name,
       })));
 
-      if (isAdmin && totalCost > 0) {
+      if (isAdmin && !isInternal && totalCost > 0) {
         const newBalance = balance - totalCost;
         await db.auth.updateMe({ credit_balance_cents: newBalance });
         await db.entities.Transaction.create({
@@ -178,6 +179,16 @@ export default function BookResource() {
         <h1 className="text-2xl font-bold tracking-tight">New Booking</h1>
         <p className="text-muted-foreground mt-1">Reserve any resource in a few steps</p>
       </div>
+
+      {user?.user_type === 'internal' && (
+        <div className="flex items-center gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3">
+          <Building2 className="w-5 h-5 text-emerald-600 shrink-0" />
+          <div>
+            <p className="text-sm font-medium text-emerald-800">Internal Booking</p>
+            <p className="text-xs text-emerald-700">As an internal user, your bookings are free — no credits will be charged.</p>
+          </div>
+        </div>
+      )}
 
       {error && (
         <Alert variant="destructive">
@@ -263,7 +274,7 @@ export default function BookResource() {
         </CardContent>
       </Card>
 
-      {selected && singleCost > 0 && (
+      {selected && singleCost > 0 && user?.user_type !== 'internal' && (
         <Card className="border-primary/20 bg-primary/5">
           <CardContent className="pt-5 space-y-2 text-sm">
             <h3 className="font-semibold mb-1">Cost Summary</h3>

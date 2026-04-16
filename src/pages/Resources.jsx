@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import ResourceCard from '@/components/resources/ResourceCard';
 import ResourceFormDialog from '@/components/resources/ResourceFormDialog';
+import { hasPermission } from '@/lib/permissions';
 
 export default function Resources() {
   const { user } = useOutletContext();
@@ -43,7 +44,7 @@ export default function Resources() {
           <h1 className="text-2xl font-bold tracking-tight">Resources</h1>
           <p className="text-muted-foreground mt-1">Browse and manage all bookable resources</p>
         </div>
-        {user?.role === 'admin' && (
+        {hasPermission(user, 'manage_resources') && (
           <Button onClick={openCreate}>
             <Plus className="w-4 h-4 mr-2" /> Add Resource
           </Button>
@@ -83,6 +84,7 @@ export default function Resources() {
               key={r.id}
               resource={r}
               isAdmin={user?.role === 'admin'}
+              isInternal={user?.user_type === 'internal'}
               onEdit={() => openEdit(r)}
             />
           ))}

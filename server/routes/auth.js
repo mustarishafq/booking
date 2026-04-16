@@ -62,9 +62,19 @@ router.post('/register', async (req, res) => {
 // GET /api/auth/me
 router.get('/me', requireAuth, async (req, res) => {
   try {
-    const [rows] = await pool.query('SELECT * FROM users WHERE id = ?', [req.userId]);
+    const [rows] = await pool.query(`
+      SELECT u.*, r.permissions AS role_permissions, r.name AS role_name, r.color AS role_color
+      FROM users u
+      LEFT JOIN roles r ON u.role_id = r.id
+      WHERE u.id = ?
+    `, [req.userId]);
     if (!rows[0]) return res.status(404).json({ message: 'User not found' });
-    res.json(safeUser(rows[0]));
+    const user = safeUser(rows[0]);
+    // Parse role permissions JSON
+    const rp = user.role_permissions;
+    user.permissions = !rp ? {} : typeof rp === 'string' ? JSON.parse(rp) : rp;
+    delete user.role_permissions;
+    res.json(user);
   } catch (e) {
     res.status(500).json({ message: e.message });
   }

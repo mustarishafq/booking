@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { format } from 'date-fns';
 import { Plus, Search, XCircle, Calendar, Clock, CheckCircle2, Ban } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { hasPermission } from '@/lib/permissions';
 
 const statusColors = {
   confirmed: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20',
@@ -29,6 +30,9 @@ export default function Bookings() {
   const [statusFilter, setStatusFilter] = useState('all');
 
   const isAdmin = user?.role === 'admin';
+  const canViewAll = hasPermission(user, 'view_all_bookings');
+  const canManage = hasPermission(user, 'manage_bookings');
+  const canCancel = hasPermission(user, 'cancel_own_booking');
 
   const { data: bookings = [], isLoading } = useQuery({
     queryKey: ['bookings'],
@@ -38,10 +42,10 @@ export default function Bookings() {
   const { data: allUsers = [] } = useQuery({
     queryKey: ['users'],
     queryFn: () => db.entities.User.list(),
-    enabled: isAdmin,
+    enabled: canManage,
   });
   const filtered = bookings
-    .filter(b => isAdmin || b.booked_by_email === user?.email)
+    .filter(b => canViewAll || b.booked_by_email === user?.email)
     .filter(b => statusFilter === 'all' || b.status === statusFilter)
     .filter(b => b.title?.toLowerCase().includes(search.toLowerCase()) || b.room_name?.toLowerCase().includes(search.toLowerCase()));
 
@@ -97,7 +101,7 @@ export default function Bookings() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Bookings</h1>
-          <p className="text-muted-foreground mt-1">{isAdmin ? 'All bookings' : 'Your bookings'}</p>
+          <p className="text-muted-foreground mt-1">{canViewAll ? 'All bookings' : 'Your bookings'}</p>
         </div>
         <Link to="/book">
           <Button><Plus className="w-4 h-4 mr-2" /> New Booking</Button>
@@ -171,7 +175,7 @@ export default function Bookings() {
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-1 flex-wrap">
-                        {isAdmin && b.status === 'pending' && (
+                        {canManage && b.status === 'pending' && (
                           <>
                             <Button variant="ghost" size="sm" className="text-emerald-600 hover:text-emerald-700" onClick={() => handleApprove(b)}>
                               <CheckCircle2 className="w-4 h-4 mr-1" /> Approve
@@ -181,7 +185,7 @@ export default function Bookings() {
                             </Button>
                           </>
                         )}
-                        {b.status === 'confirmed' && (isAdmin || b.booked_by_email === user?.email) && (
+                        {b.status === 'confirmed' && (canManage || b.booked_by_email === user?.email) && (
                           <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => handleCancel(b)}>
                             <XCircle className="w-4 h-4 mr-1" /> Cancel
                           </Button>

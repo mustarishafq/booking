@@ -2,7 +2,7 @@ import React from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Users, MapPin, Tag } from 'lucide-react';
+import { Users, MapPin, Tag, Building2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 const pricingLabel = { hourly: '/hr', daily: '/day', flat: ' flat' };
@@ -13,7 +13,7 @@ const statusColors = {
   inactive: 'bg-red-500/10 text-red-500',
 };
 
-export default function ResourceCard({ resource, onEdit, isAdmin }) {
+export default function ResourceCard({ resource, onEdit, isAdmin, isInternal }) {
   return (
     <Card className="overflow-hidden group hover:shadow-lg transition-all duration-300">
       <div className="aspect-video bg-muted relative overflow-hidden">
@@ -54,7 +54,13 @@ export default function ResourceCard({ resource, onEdit, isAdmin }) {
             </div>
           )}
           <div className="flex items-center gap-1 font-medium text-foreground">
-            <span>RM{resource.rate}{pricingLabel[resource.pricing_model]}</span>
+            {isInternal ? (
+              <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">
+                <Building2 className="w-3.5 h-3.5" />
+              </span>
+            ) : (
+              <span>RM{resource.rate}{pricingLabel[resource.pricing_model]}</span>
+            )}
           </div>
           {resource.location && (
             <div className="flex items-center gap-1">

@@ -4,27 +4,43 @@ import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, CalendarDays, LayoutGrid, BookOpen, 
-  Users, CreditCard, Receipt, Settings, LogOut, X, Sparkles
+  Users, CreditCard, Receipt, Settings, LogOut, X, Sparkles, Shield
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { hasPermission, hasAnyPermission } from '@/lib/permissions';
 
 const navItems = [
-  { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
-  { label: 'Resources', icon: LayoutGrid, path: '/resources' },
-  { label: 'Bookings', icon: BookOpen, path: '/bookings' },
-  { label: 'Calendar', icon: CalendarDays, path: '/calendar' },
-  { label: 'Credits', icon: CreditCard, path: '/credits' },
-  { label: 'Transactions', icon: Receipt, path: '/transactions' },
+  { label: 'Dashboard',     icon: LayoutDashboard, path: '/' },
+  { label: 'Resources',     icon: LayoutGrid,       path: '/resources',    permission: 'view_resources' },
+  { label: 'Bookings',      icon: BookOpen,         path: '/bookings',     permission: 'book_resources' },
+  { label: 'Calendar',      icon: CalendarDays,     path: '/calendar',     permission: 'view_calendar' },
+  { label: 'Credits',       icon: CreditCard,       path: '/credits',      permission: 'top_up_credits',        paymentOnly: true },
+  { label: 'Transactions',  icon: Receipt,          path: '/transactions', permission: 'view_own_transactions',  paymentOnly: true },
 ];
 
 const adminItems = [
-  { label: 'Users', icon: Users, path: '/users' },
-  { label: 'Settings', icon: Settings, path: '/settings' },
+  { label: 'Users',                 icon: Users,    path: '/users',    permission: 'view_users' },
+  { label: 'Roles & Permissions',  icon: Shield,   path: '/roles',    permission: 'manage_roles' },
+  { label: 'Settings',             icon: Settings, path: '/settings', permission: 'manage_settings' },
 ];
 
 export default function Sidebar({ user, open, onClose }) {
   const location = useLocation();
   const isAdmin = user?.role === 'admin';
+
+  // A nav item is visible if the user is admin OR has the required permission
+  // (no permission key on the item means always visible)
+  const isInternal = user?.user_type === 'internal';
+  const visibleNavItems = navItems.filter(item =>
+    (!item.permission || hasPermission(user, item.permission)) &&
+    !(item.paymentOnly && isInternal)
+  );
+
+  const visibleAdminItems = adminItems.filter(item =>
+    hasPermission(user, item.permission)
+  );
+
+  const showAdminSection = isAdmin || visibleAdminItems.length > 0;
 
   return (
     <>
@@ -51,16 +67,16 @@ export default function Sidebar({ user, open, onClose }) {
 
         <nav className="flex-1 px-3 space-y-1 overflow-y-auto">
           <p className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Main</p>
-          {navItems.map(item => (
+          {visibleNavItems.map(item => (
             <NavLink key={item.path} item={item} active={location.pathname === item.path} onClick={onClose} />
           ))}
-          
-          {isAdmin && (
+
+          {showAdminSection && (
             <>
               <div className="pt-4 pb-2">
                 <p className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Admin</p>
               </div>
-              {adminItems.map(item => (
+              {(isAdmin ? adminItems : visibleAdminItems).map(item => (
                 <NavLink key={item.path} item={item} active={location.pathname === item.path} onClick={onClose} />
               ))}
             </>

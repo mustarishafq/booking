@@ -121,3 +121,44 @@ CREATE TABLE IF NOT EXISTS settings (
   `value` TEXT,
   PRIMARY KEY (`key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ------------------------------------------------------------------
+-- Roles (custom roles with permission flags)
+-- ------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS roles (
+  id          CHAR(36)     NOT NULL,
+  name        VARCHAR(100) NOT NULL,
+  description TEXT,
+  color       VARCHAR(50)  NOT NULL DEFAULT 'slate',
+  permissions JSON,
+  created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_roles_name (name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Add role_id FK to users (safe to run multiple times via IF NOT EXISTS guard via procedure)
+SET @col_exists = (
+  SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'role_id'
+);
+SET @sql = IF(@col_exists = 0,
+  'ALTER TABLE users ADD COLUMN role_id CHAR(36) NULL DEFAULT NULL',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- Add user_type column to users (internal = free bookings, external = normal credit flow)
+SET @col_exists = (
+  SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'user_type'
+);
+SET @sql = IF(@col_exists = 0,
+  "ALTER TABLE users ADD COLUMN user_type ENUM('internal','external') NOT NULL DEFAULT 'external'",
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;

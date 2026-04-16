@@ -10,6 +10,7 @@ import cors from 'cors';
 import authRouter from './routes/auth.js';
 import usersRouter from './routes/users.js';
 import settingsRouter from './routes/settings.js';
+import rolesRouter from './routes/roles.js';
 import { createEntityRouter } from './routes/entities.js';
 
 const app  = express();
@@ -41,6 +42,9 @@ app.use('/api/users',        usersRouter);
 
 // Settings (admin)
 app.use('/api/settings',     settingsRouter);
+
+// Roles (admin)
+app.use('/api/roles',        rolesRouter);
 
 // Generic entity CRUD
 app.use('/api/resources',    createEntityRouter('resources'));
