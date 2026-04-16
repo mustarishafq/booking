@@ -9,6 +9,7 @@ import Sidebar from './Sidebar';
 
 export default function AppLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [user, setUser] = useState(null);
 
   useEffect(() => {
@@ -17,10 +18,15 @@ export default function AppLayout() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
-      <Sidebar user={user} open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <Sidebar user={user} open={sidebarOpen} onClose={() => setSidebarOpen(false)} collapsed={sidebarCollapsed} onToggleCollapse={() => setSidebarCollapsed(c => !c)} />
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <header className="h-16 border-b border-border bg-card/80 backdrop-blur-sm flex items-center px-4 lg:px-6 shrink-0">
+        <header className="h-16 border-b border-border bg-card/80 backdrop-blur-sm flex items-center px-4 lg:px-4 shrink-0">
+          {/* Mobile: open drawer */}
           <Button variant="ghost" size="icon" className="lg:hidden mr-2" onClick={() => setSidebarOpen(true)}>
+            <Menu className="w-5 h-5" />
+          </Button>
+          {/* Desktop: collapse/expand sidebar */}
+          <Button variant="ghost" size="icon" className="hidden lg:flex mr-2" onClick={() => setSidebarCollapsed(c => !c)}>
             <Menu className="w-5 h-5" />
           </Button>
           <div className="flex-1" />
