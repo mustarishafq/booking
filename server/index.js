@@ -6,6 +6,11 @@ if (!process.env.JWT_SECRET) {
 }
 
 import express from 'express';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+import { existsSync } from 'fs';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 import cors from 'cors';
 import authRouter from './routes/auth.js';
 import usersRouter from './routes/users.js';
@@ -58,6 +63,16 @@ app.use((err, req, res, _next) => {
   console.error(`[${req.method} ${req.path}] ${err.message}`);
   res.status(status).json({ message: err.message || 'Internal server error' });
 });
+
+// Serve frontend in production
+const distPath = join(__dirname, '../dist');
+if (existsSync(distPath)) {
+  app.use(express.static(distPath));
+  // SPA fallback — serve index.html for all non-API routes
+  app.get('*', (req, res) => {
+    res.sendFile(join(distPath, 'index.html'));
+  });
+}
 
 app.listen(PORT, () => {
   console.log(`BookHub API running on http://localhost:${PORT}`);
