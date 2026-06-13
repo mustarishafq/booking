@@ -89,7 +89,11 @@ export const db = {
           headers: { Authorization: `Bearer ${getToken()}` },
           body: formData,
         });
-        if (!res.ok) throw new Error('Upload failed');
+        if (!res.ok) {
+          let message = 'Upload failed';
+          try { message = (await res.json()).message || message; } catch { /* ignore */ }
+          throw new Error(message);
+        }
         return res.json();
       },
     },

@@ -1,19 +1,29 @@
 import * as React from "react"
 
 const MOBILE_BREAKPOINT = 768
+const COMPACT_NAV_BREAKPOINT = 1024
 
-export function useIsMobile() {
-  const [isMobile, setIsMobile] = React.useState(undefined)
+function useMediaQuery(maxWidth) {
+  const [matches, setMatches] = React.useState(undefined)
 
   React.useEffect(() => {
-    const mql = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`)
+    const mql = window.matchMedia(`(max-width: ${maxWidth - 1}px)`)
     const onChange = () => {
-      setIsMobile(window.innerWidth < MOBILE_BREAKPOINT)
+      setMatches(window.innerWidth < maxWidth)
     }
     mql.addEventListener("change", onChange)
-    setIsMobile(window.innerWidth < MOBILE_BREAKPOINT)
-    return () => mql.removeEventListener("change", onChange);
-  }, [])
+    setMatches(window.innerWidth < maxWidth)
+    return () => mql.removeEventListener("change", onChange)
+  }, [maxWidth])
 
-  return !!isMobile
+  return !!matches
+}
+
+export function useIsMobile() {
+  return useMediaQuery(MOBILE_BREAKPOINT)
+}
+
+/** Mobile + tablet: dock profile, no top-bar profile, compact user dock */
+export function useCompactNav() {
+  return useMediaQuery(COMPACT_NAV_BREAKPOINT)
 }

@@ -1,50 +1,65 @@
 import { db } from '@/api/base44Client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Outlet } from 'react-router-dom';
-import { Menu } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 
-import Sidebar from './Sidebar';
+import TopBar from './TopBar';
+import BottomNav from './BottomNav';
+import MobileNavSidebar from './MobileNavSidebar';
+import BookingModal from '@/components/bookings/BookingModal';
 
 export default function AppLayout() {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [user, setUser] = useState(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [bookingOpen, setBookingOpen] = useState(false);
+  const [bookingPreset, setBookingPreset] = useState({
+    resourceId: '',
+    startTime: '',
+    endTime: '',
+  });
 
   useEffect(() => {
     db.auth.me().then(setUser).catch(() => {});
   }, []);
 
+  const openBookingModal = useCallback((preset = '') => {
+    if (typeof preset === 'string') {
+      setBookingPreset({ resourceId: preset, startTime: '', endTime: '' });
+    } else {
+      setBookingPreset({
+        resourceId: preset?.resourceId || '',
+        startTime: preset?.startTime || '',
+        endTime: preset?.endTime || '',
+      });
+    }
+    setBookingOpen(true);
+  }, []);
+
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
-      <Sidebar user={user} open={sidebarOpen} onClose={() => setSidebarOpen(false)} collapsed={sidebarCollapsed} onToggleCollapse={() => setSidebarCollapsed(c => !c)} />
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <header className="h-16 border-b border-border bg-card/80 backdrop-blur-sm flex items-center px-4 lg:px-4 shrink-0">
-          {/* Mobile: open drawer */}
-          <Button variant="ghost" size="icon" className="lg:hidden mr-2" onClick={() => setSidebarOpen(true)}>
-            <Menu className="w-5 h-5" />
-          </Button>
-          {/* Desktop: collapse/expand sidebar */}
-          <Button variant="ghost" size="icon" className="hidden lg:flex mr-2" onClick={() => setSidebarCollapsed(c => !c)}>
-            <Menu className="w-5 h-5" />
-          </Button>
-          <div className="flex-1" />
-          <div className="flex items-center gap-3">
-            {user && (
-              <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-primary/5 rounded-lg border border-primary/10">
-                <span className="text-xs text-muted-foreground">Credits:</span>
-                <span className="text-sm font-semibold text-primary">
-                  RM{((user.credit_balance_cents || 0) / 100).toFixed(2)}
-                </span>
-              </div>
-            )}
-          </div>
-        </header>
-        <main className="flex-1 overflow-y-auto p-4 lg:p-6">
-          <Outlet context={{ user, setUser }} />
-        </main>
-      </div>
+    <div className="min-h-[100dvh] bg-background">
+      <TopBar user={user} onMenuOpen={() => setMenuOpen(true)} />
+      <MobileNavSidebar user={user} open={menuOpen} onOpenChange={setMenuOpen} />
+      <BookingModal
+        open={bookingOpen}
+        onOpenChange={setBookingOpen}
+        preselectedResourceId={bookingPreset.resourceId}
+        preselectedStartTime={bookingPreset.startTime}
+        preselectedEndTime={bookingPreset.endTime}
+        user={user}
+        setUser={setUser}
+      />
+
+      <main className="pt-16 pb-[calc(4.75rem+env(safe-area-inset-bottom))]">
+        <div className="max-w-[1600px] mx-auto p-4 sm:p-6">
+          <Outlet context={{ user, setUser, openBookingModal }} />
+        </div>
+      </main>
+
+      <BottomNav
+        user={user}
+        onOpenBooking={() => openBookingModal()}
+        bookingModalOpen={bookingOpen}
+      />
     </div>
   );
 }

@@ -4,6 +4,10 @@ import pool from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import { sendBookingRejected, sendBookingCancelled, sendBookingSubmitted } from '../emailer.js';
 import { waBookingSubmitted, waBookingRejected, waBookingCancelled } from '../whatsapp.js';
+import { notifyBookingSubmitted, notifyBookingStatusChange } from '../notifications.js';
+import {
+  sendBookingWebhook,
+} from '../webhooks.js';
 
 // Fields that are stored as JSON strings in MySQL
 const JSON_FIELDS = {
@@ -13,7 +17,8 @@ const JSON_FIELDS = {
 
 // Fields stored as TINYINT(1) that should be exposed as booleans
 const BOOLEAN_FIELDS = {
-  bookings: ['is_recurring'],
+  bookings:  ['is_recurring'],
+  resources: ['requires_approval'],
 };
 
 const COLUMN_ALIASES = { created_date: 'created_at' };
@@ -66,6 +71,31 @@ const serializeInput = (table, data) => {
 
 const mapCol = (col) => COLUMN_ALIASES[col] || col;
 
+const enrichResourceRows = async (rows) => {
+  const parsed = rows.map(r => parseRow('resources', r));
+  const userIds = [...new Set(parsed.map(r => r.pic_user_id).filter(Boolean))];
+
+  let userById = {};
+  if (userIds.length) {
+    const placeholders = userIds.map(() => '?').join(', ');
+    const [users] = await pool.query(
+      `SELECT id, email, full_name FROM users WHERE id IN (${placeholders})`,
+      userIds,
+    );
+    userById = Object.fromEntries(users.map(u => [u.id, u]));
+  }
+
+  return parsed.map(r => {
+    const pic = r.pic_user_id ? userById[r.pic_user_id] : null;
+    const pic_name = (pic?.full_name || '').trim() || null;
+    return {
+      ...r,
+      pic_email: pic?.email || null,
+      pic_name,
+    };
+  });
+};
+
 export const createEntityRouter = (table) => {
   const router = Router();
   router.use(requireAuth);
@@ -89,6 +119,9 @@ export const createEntityRouter = (table) => {
       }
 
       const [rows] = await pool.query(sql, params);
+      if (table === 'resources') {
+        return res.json(await enrichResourceRows(rows));
+      }
       res.json(rows.map(r => parseRow(table, r)));
     } catch (e) {
       res.status(500).json({ message: e.message });
@@ -117,10 +150,16 @@ export const createEntityRouter = (table) => {
       const ph    = rowValues.map(() => `(${uniqueKeys.map(() => '?').join(', ')})`).join(', ');
       await pool.query(`INSERT INTO \`${table}\` (${cols}) VALUES ${ph}`, rowValues.flat());
 
-      // Email + WhatsApp on booking submission
+      // Email + WhatsApp + in-app + webhooks on booking submission
       if (table === 'bookings' && records[0]?.booked_by_email) {
-        sendBookingSubmitted(records[0]).catch(() => {});
-        waBookingSubmitted(records[0]).catch(() => {});
+        const booking = records[0];
+        sendBookingSubmitted(booking).catch(() => {});
+        waBookingSubmitted(booking).catch(() => {});
+        notifyBookingSubmitted(booking).catch(() => {});
+        sendBookingWebhook('notify_webhook_submitted', 'booking.submitted', booking).catch(() => {});
+        if (booking.status === 'confirmed') {
+          sendBookingWebhook('notify_webhook_confirmed', 'booking.confirmed', booking).catch(() => {});
+        }
       }
 
       res.status(201).json({ count: records.length });
@@ -137,6 +176,10 @@ export const createEntityRouter = (table) => {
       const ph   = Object.keys(raw).map(() => '?').join(', ');
       await pool.query(`INSERT INTO \`${table}\` (${cols}) VALUES (${ph})`, Object.values(raw));
       const [rows] = await pool.query(`SELECT * FROM \`${table}\` WHERE id = ?`, [raw.id]);
+      if (table === 'resources') {
+        const [enriched] = await enrichResourceRows(rows);
+        return res.status(201).json(enriched);
+      }
       res.status(201).json(parseRow(table, rows[0]));
     } catch (e) {
       res.status(500).json({ message: e.message });
@@ -148,6 +191,10 @@ export const createEntityRouter = (table) => {
     try {
       const [rows] = await pool.query(`SELECT * FROM \`${table}\` WHERE id = ?`, [req.params.id]);
       if (!rows[0]) return res.status(404).json({ message: 'Not found' });
+      if (table === 'resources') {
+        const [enriched] = await enrichResourceRows(rows);
+        return res.json(enriched);
+      }
       res.json(parseRow(table, rows[0]));
     } catch (e) {
       res.status(500).json({ message: e.message });
@@ -166,13 +213,30 @@ export const createEntityRouter = (table) => {
       const values = [...Object.values(data), req.params.id];
       await pool.query(`UPDATE \`${table}\` SET ${sets} WHERE id = ?`, values);
       const [rows] = await pool.query(`SELECT * FROM \`${table}\` WHERE id = ?`, [req.params.id]);
-      const updated = parseRow(table, rows[0]);
+      let updated = parseRow(table, rows[0]);
 
-      // Fire email + WhatsApp notifications on booking status changes
+      if (table === 'resources') {
+        [updated] = await enrichResourceRows(rows);
+      }
+
+      // Fire notifications on booking status changes
       if (table === 'bookings' && oldRow && data.status && data.status !== oldRow.status) {
         const booking = { ...oldRow, ...updated };
-        if (data.status === 'rejected')  { sendBookingRejected(booking).catch(() => {}); waBookingRejected(booking).catch(() => {}); }
-        if (data.status === 'cancelled') { sendBookingCancelled(booking).catch(() => {}); waBookingCancelled(booking).catch(() => {}); }
+        notifyBookingStatusChange(booking, data.status).catch(() => {});
+
+        if (data.status === 'rejected') {
+          sendBookingRejected(booking).catch(() => {});
+          waBookingRejected(booking).catch(() => {});
+          sendBookingWebhook('notify_webhook_rejected', 'booking.rejected', booking).catch(() => {});
+        }
+        if (data.status === 'cancelled') {
+          sendBookingCancelled(booking).catch(() => {});
+          waBookingCancelled(booking).catch(() => {});
+          sendBookingWebhook('notify_webhook_cancelled', 'booking.cancelled', booking).catch(() => {});
+        }
+        if (data.status === 'confirmed') {
+          sendBookingWebhook('notify_webhook_confirmed', 'booking.confirmed', booking).catch(() => {});
+        }
       }
 
       res.json(updated);

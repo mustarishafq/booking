@@ -1,10 +1,20 @@
 import { db } from '@/api/base44Client';
 
-import React, { useState } from 'react';
-import { useOutletContext, useNavigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { addWeeks } from 'date-fns';
+import { toast } from 'sonner';
+import {
+  Loader2, AlertCircle, CheckCircle2, Building2, CalendarPlus,
+} from 'lucide-react';
 
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
@@ -13,52 +23,30 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, AlertCircle, CheckCircle2, Building2 } from 'lucide-react';
-import { differenceInHours, differenceInCalendarDays, addWeeks } from 'date-fns';
+import { calcBookingCost, bookingDurationLabel } from '@/lib/bookingUtils';
 
-function calcCost(resource, start, end) {
-  if (!resource || !start || !end) return 0;
-  const s = new Date(start);
-  const e = new Date(end);
-  if (e <= s) return 0;
-  if (resource.pricing_model === 'hourly') {
-    const hours = differenceInHours(e, s);
-    return Math.round(hours * resource.rate * 100);
-  }
-  if (resource.pricing_model === 'daily') {
-    const days = Math.ceil(differenceInCalendarDays(e, s)) || 1;
-    return Math.round(days * resource.rate * 100);
-  }
-  // flat
-  return Math.round(resource.rate * 100);
-}
+const emptyForm = {
+  resource_id: '',
+  title: '',
+  start_time: '',
+  end_time: '',
+  attendees: '',
+  notes: '',
+  is_recurring: false,
+  recurrence_weeks: 4,
+};
 
-function durationLabel(resource, start, end) {
-  if (!start || !end) return '';
-  const s = new Date(start);
-  const e = new Date(end);
-  if (resource?.pricing_model === 'hourly') return `${differenceInHours(e, s)} hour(s)`;
-  if (resource?.pricing_model === 'daily') return `${Math.ceil(differenceInCalendarDays(e, s)) || 1} day(s)`;
-  return 'Flat fee';
-}
-
-export default function BookResource() {
-  const { user, setUser } = useOutletContext();
-  const navigate = useNavigate();
+export default function BookingModal({
+  open,
+  onOpenChange,
+  preselectedResourceId = '',
+  preselectedStartTime = '',
+  preselectedEndTime = '',
+  user,
+  setUser,
+}) {
   const queryClient = useQueryClient();
-  const urlParams = new URLSearchParams(window.location.search);
-  const preselected = urlParams.get('resource');
-
-  const [form, setForm] = useState({
-    resource_id: preselected || '',
-    title: '',
-    start_time: '',
-    end_time: '',
-    attendees: '',
-    notes: '',
-    is_recurring: false,
-    recurrence_weeks: 4,
-  });
+  const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -66,17 +54,31 @@ export default function BookResource() {
   const { data: resources = [] } = useQuery({
     queryKey: ['resources'],
     queryFn: () => db.entities.Resource.list(),
+    enabled: open,
   });
 
   const { data: bookings = [] } = useQuery({
     queryKey: ['bookings'],
     queryFn: () => db.entities.Booking.list('-created_date', 200),
+    enabled: open,
   });
+
+  useEffect(() => {
+    if (!open) return;
+    setForm({
+      ...emptyForm,
+      resource_id: preselectedResourceId || '',
+      start_time: preselectedStartTime || '',
+      end_time: preselectedEndTime || '',
+    });
+    setError('');
+    setSuccess('');
+    setSaving(false);
+  }, [open, preselectedResourceId, preselectedStartTime, preselectedEndTime]);
 
   const activeResources = resources.filter(r => r.status === 'active');
   const selected = resources.find(r => r.id === form.resource_id);
-
-  const singleCost = calcCost(selected, form.start_time, form.end_time);
+  const singleCost = calcBookingCost(selected, form.start_time, form.end_time);
   const totalCost = form.is_recurring ? singleCost * Number(form.recurrence_weeks) : singleCost;
 
   const checkConflict = (start, end, resourceId) =>
@@ -103,7 +105,6 @@ export default function BookResource() {
     const isInternal = user?.user_type === 'internal';
     const balance = user?.credit_balance_cents || 0;
 
-    // Only check and deduct credits for external admins (internals are free, non-admins are pending until approved)
     if (isAdmin && !isInternal && totalCost > balance) {
       setError(`Insufficient credits. Need RM${(totalCost / 100).toFixed(2)}, you have RM${(balance / 100).toFixed(2)}.`);
       return;
@@ -124,7 +125,8 @@ export default function BookResource() {
     setSaving(true);
     try {
       const groupId = form.is_recurring ? `grp_${Date.now()}` : undefined;
-      const bookingStatus = isAdmin ? 'confirmed' : 'pending';
+      const needsApproval = selected?.requires_approval !== false && !isAdmin;
+      const bookingStatus = needsApproval ? 'pending' : 'confirmed';
 
       await db.entities.Booking.bulkCreate(instances.map(inst => ({
         resource_id: form.resource_id,
@@ -160,13 +162,14 @@ export default function BookResource() {
       }
 
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
-      setSuccess(
-        isAdmin
-          ? `Booked! ${instances.length} session(s) confirmed.`
-          : `Request submitted! Awaiting admin approval.`
-      );
-      setTimeout(() => navigate('/bookings'), 1500);
-      // keep saving=true so button stays disabled/loading until navigation
+
+      const message = needsApproval
+        ? 'Request submitted! Awaiting admin approval.'
+        : `Booked! ${instances.length} session(s) confirmed.`;
+      setSuccess(message);
+      toast.success(message);
+
+      setTimeout(() => onOpenChange(false), 900);
     } catch (err) {
       setError(err.message || 'Failed to create booking.');
       setSaving(false);
@@ -174,38 +177,40 @@ export default function BookResource() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">New Booking</h1>
-        <p className="text-muted-foreground mt-1">Reserve any resource in a few steps</p>
-      </div>
-
-      {user?.user_type === 'internal' && (
-        <div className="flex items-center gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3">
-          <Building2 className="w-5 h-5 text-emerald-600 shrink-0" />
-          <div>
-            <p className="text-sm font-medium text-emerald-800">Internal Booking</p>
-            <p className="text-xs text-emerald-700">As an internal user, your bookings are free — no credits will be charged.</p>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg sm:max-w-xl max-h-[90dvh] overflow-y-auto rounded-2xl p-0 gap-0">
+        <DialogHeader className="px-6 pt-6 pb-4 border-b border-border sticky top-0 bg-background z-10">
+          <div className="flex items-center gap-2">
+            <CalendarPlus className="w-5 h-5 text-primary" />
+            <DialogTitle>New Booking</DialogTitle>
           </div>
-        </div>
-      )}
+          <DialogDescription>Reserve any resource in a few steps</DialogDescription>
+        </DialogHeader>
 
-      {error && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
-      {success && (
-        <Alert className="border-emerald-500/20 bg-emerald-500/5">
-          <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-          <AlertDescription className="text-emerald-700">{success}</AlertDescription>
-        </Alert>
-      )}
+        <div className="px-6 py-5 space-y-4">
+          {user?.user_type === 'internal' && (
+            <div className="flex items-center gap-3 rounded-xl border border-success/30 bg-success/5 px-4 py-3">
+              <Building2 className="w-5 h-5 text-success shrink-0" />
+              <div>
+                <p className="text-sm font-medium text-success">Internal Booking</p>
+                <p className="text-xs text-muted-foreground">As an internal user, your bookings are free — no credits will be charged.</p>
+              </div>
+            </div>
+          )}
 
-      <Card>
-        <CardHeader><CardTitle className="text-lg">Details</CardTitle></CardHeader>
-        <CardContent className="space-y-4">
+          {error && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+          {success && (
+            <Alert className="rounded-xl border border-success/30 bg-success/5">
+              <CheckCircle2 className="h-4 w-4 text-success" />
+              <AlertDescription className="text-success">{success}</AlertDescription>
+            </Alert>
+          )}
+
           <div className="space-y-1.5">
             <Label>Resource *</Label>
             <Select value={form.resource_id} onValueChange={v => setForm(f => ({ ...f, resource_id: v }))}>
@@ -222,10 +227,15 @@ export default function BookResource() {
               </SelectContent>
             </Select>
             {selected && (
-              <div className="flex gap-2 mt-1">
+              <div className="flex gap-2 mt-1 flex-wrap">
                 <Badge variant="outline">{selected.resource_type}</Badge>
                 <Badge variant="outline" className="capitalize">{selected.pricing_model}</Badge>
                 {selected.capacity > 0 && <Badge variant="outline">Cap: {selected.capacity}</Badge>}
+                {selected.requires_approval !== false && user?.role !== 'admin' && (
+                  <Badge variant="outline" className="border-warning/30 text-warning bg-warning/10">
+                    Requires approval
+                  </Badge>
+                )}
               </div>
             )}
           </div>
@@ -235,7 +245,7 @@ export default function BookResource() {
             <Input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. Client pickup, Team meeting…" />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label>Start *</Label>
               <Input type="datetime-local" value={form.start_time} onChange={e => setForm(f => ({ ...f, start_time: e.target.value }))} />
@@ -253,7 +263,7 @@ export default function BookResource() {
 
           <div className="space-y-1.5">
             <Label>Notes</Label>
-            <Textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Any special requirements…" />
+            <Textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Any special requirements…" rows={3} />
           </div>
 
           <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
@@ -271,39 +281,39 @@ export default function BookResource() {
                 onChange={e => setForm(f => ({ ...f, recurrence_weeks: e.target.value }))} />
             </div>
           )}
-        </CardContent>
-      </Card>
 
-      {selected && singleCost > 0 && user?.user_type !== 'internal' && (
-        <Card className="border-primary/20 bg-primary/5">
-          <CardContent className="pt-5 space-y-2 text-sm">
-            <h3 className="font-semibold mb-1">Cost Summary</h3>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">{durationLabel(selected, form.start_time, form.end_time)} × RM{selected.rate}</span>
-              <span>RM{(singleCost / 100).toFixed(2)}</span>
-            </div>
-            {form.is_recurring && (
+          {selected && singleCost > 0 && user?.user_type !== 'internal' && (
+            <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-2 text-sm">
+              <h3 className="font-semibold">Cost Summary</h3>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">× {form.recurrence_weeks} weeks</span>
-                <span>RM{(totalCost / 100).toFixed(2)}</span>
+                <span className="text-muted-foreground">{bookingDurationLabel(selected, form.start_time, form.end_time)} × RM{selected.rate}</span>
+                <span>RM{(singleCost / 100).toFixed(2)}</span>
               </div>
-            )}
-            <div className="border-t pt-2 flex justify-between font-semibold">
-              <span>Total</span>
-              <span className="text-primary">RM{(totalCost / 100).toFixed(2)}</span>
+              {form.is_recurring && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">× {form.recurrence_weeks} weeks</span>
+                  <span>RM{(totalCost / 100).toFixed(2)}</span>
+                </div>
+              )}
+              <div className="border-t pt-2 flex justify-between font-semibold">
+                <span>Total</span>
+                <span className="text-primary">RM{(totalCost / 100).toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-muted-foreground">
+                <span>Your balance</span>
+                <span>RM{((user?.credit_balance_cents || 0) / 100).toFixed(2)}</span>
+              </div>
             </div>
-            <div className="flex justify-between text-muted-foreground">
-              <span>Your balance</span>
-              <span>RM{((user?.credit_balance_cents || 0) / 100).toFixed(2)}</span>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+          )}
+        </div>
 
-      <Button className="w-full" size="lg" onClick={handleBook} disabled={saving}>
-        {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-        Confirm Booking
-      </Button>
-    </div>
+        <div className="px-6 pb-6 pt-2 border-t border-border sticky bottom-0 bg-background">
+          <Button className="w-full shadow-md shadow-primary/20 hover:shadow-primary/30" size="lg" onClick={handleBook} disabled={saving}>
+            {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+            {selected?.requires_approval !== false && user?.role !== 'admin' ? 'Submit Request' : 'Confirm Booking'}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

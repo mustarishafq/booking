@@ -41,6 +41,15 @@
     "image_url": {
       "type": "string"
     },
+    "requires_approval": {
+      "type": "boolean",
+      "default": true,
+      "description": "When true, non-admin bookings require admin approval before confirmation"
+    },
+    "pic_user_id": {
+      "type": "string",
+      "description": "User id of the person in charge — receives notifications when this resource is booked"
+    },
     "status": {
       "type": "string",
       "enum": [

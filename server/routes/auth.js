@@ -5,6 +5,7 @@ import jwt from 'jsonwebtoken';
 import pool from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import { sendPasswordResetEmail } from '../emailer.js';
+import { getEffectivePermissions } from '../permissions.js';
 
 const router = Router();
 const JWT_SECRET   = process.env.JWT_SECRET;
@@ -70,9 +71,9 @@ router.get('/me', requireAuth, async (req, res) => {
     `, [req.userId]);
     if (!rows[0]) return res.status(404).json({ message: 'User not found' });
     const user = safeUser(rows[0]);
-    // Parse role permissions JSON
     const rp = user.role_permissions;
-    user.permissions = !rp ? {} : typeof rp === 'string' ? JSON.parse(rp) : rp;
+    const rolePermissions = !rp ? {} : typeof rp === 'string' ? JSON.parse(rp) : rp;
+    user.permissions = getEffectivePermissions(user, rolePermissions);
     delete user.role_permissions;
     res.json(user);
   } catch (e) {

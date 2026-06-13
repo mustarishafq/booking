@@ -7,9 +7,9 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { CreditCard, CheckCircle2, Wallet, Loader2 } from 'lucide-react';
+import PageHeader from '@/components/layout/PageHeader';
 
 const CREDIT_PACKAGES = [
   { amount: 2000, label: 'RM20.00', bonus: '' },
@@ -58,19 +58,20 @@ export default function Credits() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Credits</h1>
-        <p className="text-muted-foreground mt-1">Manage your booking credits</p>
-      </div>
+      <PageHeader
+        icon={CreditCard}
+        title="Credits"
+        description="Manage your booking credits"
+      />
 
       {success && (
-        <Alert className="border-emerald-500/20 bg-emerald-500/5">
-          <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-          <AlertDescription className="text-emerald-700">{success}</AlertDescription>
+        <Alert className="rounded-xl border border-success/30 bg-success/5">
+          <CheckCircle2 className="h-4 w-4 text-success" />
+          <AlertDescription className="text-success">{success}</AlertDescription>
         </Alert>
       )}
 
-      <Card className="bg-gradient-to-br from-primary/5 via-accent/5 to-primary/5 border-primary/10">
+      <Card className="rounded-2xl border border-primary/10 bg-gradient-to-br from-primary/5 via-info/5 to-primary/5">
         <CardContent className="pt-6">
           <div className="flex items-center gap-4">
             <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center">

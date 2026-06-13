@@ -12,20 +12,20 @@ import { format } from 'date-fns';
 import { ArrowUpRight, ArrowDownRight, Receipt } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { hasPermission } from '@/lib/permissions';
+import PageHeader from '@/components/layout/PageHeader';
+import EmptyState from '@/components/ui/EmptyState';
 
 const typeLabels = {
-  credit_purchase: { label: 'Credit Purchase', color: 'bg-emerald-500/10 text-emerald-600' },
-  booking_charge: { label: 'Booking Charge', color: 'bg-primary/10 text-primary' },
-  refund: { label: 'Refund', color: 'bg-amber-500/10 text-amber-600' },
+  credit_purchase: { label: 'Credit Purchase', color: 'bg-success/10 text-success border-success/30' },
+  booking_charge: { label: 'Booking Charge', color: 'bg-primary/10 text-primary border-primary/30' },
+  refund: { label: 'Refund', color: 'bg-warning/10 text-warning border-warning/30' },
   admin_adjustment: { label: 'Adjustment', color: 'bg-secondary text-secondary-foreground' },
 };
 
 export default function Transactions() {
   const { user } = useOutletContext();
   const [typeFilter, setTypeFilter] = useState('all');
-  if (user?.user_type === 'internal') return <Navigate to="/" replace />;
 
-  const isAdmin = user?.role === 'admin';
   const canViewAll = hasPermission(user, 'view_all_transactions');
 
   const { data: transactions = [], isLoading } = useQuery({
@@ -33,37 +33,37 @@ export default function Transactions() {
     queryFn: () => db.entities.Transaction.list('-created_date', 100),
   });
 
+  if (user?.user_type === 'internal') return <Navigate to="/" replace />;
+
   const filtered = transactions
     .filter(t => canViewAll || t.user_email === user?.email)
     .filter(t => typeFilter === 'all' || t.type === typeFilter);
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Transactions</h1>
-          <p className="text-muted-foreground mt-1">Your credit history</p>
-        </div>
-        <Select value={typeFilter} onValueChange={setTypeFilter}>
-          <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Types</SelectItem>
-            {Object.entries(typeLabels).map(([k, v]) => (
-              <SelectItem key={k} value={k}>{v.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      <PageHeader
+        icon={Receipt}
+        title="Transactions"
+        description={canViewAll ? 'All credit activity across the system' : 'Your credit history'}
+        actions={
+          <Select value={typeFilter} onValueChange={setTypeFilter}>
+            <SelectTrigger className="w-full sm:w-48"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Types</SelectItem>
+              {Object.entries(typeLabels).map(([k, v]) => (
+                <SelectItem key={k} value={k}>{v.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        }
+      />
 
       {isLoading ? (
-        <div className="space-y-3">{[1,2,3].map(i => <Skeleton key={i} className="h-16 rounded-lg" />)}</div>
+        <div className="space-y-3">{[1, 2, 3].map(i => <Skeleton key={i} className="h-16 rounded-lg" />)}</div>
       ) : filtered.length === 0 ? (
-        <div className="text-center py-16">
-          <Receipt className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
-          <p className="text-muted-foreground">No transactions found</p>
-        </div>
+        <EmptyState icon={Receipt} title="No transactions found" />
       ) : (
-        <Card>
+        <Card className="rounded-2xl border border-border">
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
@@ -86,7 +86,7 @@ export default function Transactions() {
                       </TableCell>
                       <TableCell className="text-sm max-w-[250px] truncate">{t.description}</TableCell>
                       <TableCell>
-                        <div className={`flex items-center gap-1 font-medium ${isPositive ? 'text-emerald-600' : 'text-red-500'}`}>
+                        <div className={`flex items-center gap-1 font-medium ${isPositive ? 'text-success' : 'text-destructive'}`}>
                           {isPositive ? <ArrowUpRight className="w-3.5 h-3.5" /> : <ArrowDownRight className="w-3.5 h-3.5" />}
                           RM{(Math.abs(t.amount_cents || 0) / 100).toFixed(2)}
                         </div>

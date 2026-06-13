@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -16,11 +15,12 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Skeleton } from '@/components/ui/skeleton';
+import PageHeader from '@/components/layout/PageHeader';
+import EmptyState from '@/components/ui/EmptyState';
 import {
   Shield, Plus, Pencil, Trash2, Loader2, Users, Settings,
-  BookOpen, LayoutGrid, Receipt, BarChart2, ShieldCheck,
-  CalendarDays, CreditCard, LayoutDashboard, Lock,
+  BookOpen, LayoutGrid, Receipt, ShieldCheck,
+  CalendarDays, CreditCard, LayoutDashboard,
 } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
@@ -225,18 +225,19 @@ export default function Roles() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Roles & Permissions</h1>
-          <p className="text-muted-foreground mt-1">Define custom roles and control what each role can do</p>
-        </div>
-        <Button onClick={openCreate}>
-          <Plus className="w-4 h-4 mr-2" /> New Role
-        </Button>
-      </div>
+      <PageHeader
+        icon={Shield}
+        title="Roles & Permissions"
+        description="Define custom roles and control what each role can do"
+        actions={
+          <Button onClick={openCreate} className="gap-2 w-full sm:w-auto shadow-md shadow-primary/20 hover:shadow-primary/30">
+            <Plus className="w-4 h-4" />
+            New Role
+          </Button>
+        }
+      />
 
-      {/* Built-in roles info */}
-      <Card>
+      <Card className="rounded-2xl border border-border">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Built-in Roles</CardTitle>
         </CardHeader>
@@ -267,21 +268,17 @@ export default function Roles() {
         {isLoading ? (
           <div className="space-y-3">{[1, 2].map(i => <Skeleton key={i} className="h-24 rounded-xl" />)}</div>
         ) : roles.length === 0 ? (
-          <Card>
-            <CardContent className="py-12 text-center">
-              <Shield className="w-10 h-10 text-muted-foreground/40 mx-auto mb-3" />
-              <p className="text-muted-foreground text-sm">No custom roles yet.</p>
-              <Button variant="outline" size="sm" className="mt-4" onClick={openCreate}>
-                <Plus className="w-4 h-4 mr-1" /> Create your first role
-              </Button>
-            </CardContent>
-          </Card>
+          <EmptyState icon={Shield} title="No custom roles yet" action={
+            <Button variant="outline" size="sm" onClick={openCreate}>
+              <Plus className="w-4 h-4 mr-1" /> Create your first role
+            </Button>
+          } className="py-12" />
         ) : (
           <div className="grid gap-4">
             {roles.map(role => {
               const enabledPerms = PERMISSION_GROUPS.flatMap(g => g.permissions).filter(p => role.permissions?.[p.key]);
               return (
-                <Card key={role.id}>
+                <Card key={role.id} className="rounded-2xl border border-border">
                   <CardContent className="p-5">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex items-start gap-3 flex-1 min-w-0">

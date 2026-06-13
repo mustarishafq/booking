@@ -40,8 +40,10 @@ CREATE TABLE IF NOT EXISTS resources (
   pricing_model ENUM('hourly','daily','flat') NOT NULL DEFAULT 'hourly',
   rate          DECIMAL(10,2) NOT NULL DEFAULT 0,
   amenities     JSON,
-  image_url     TEXT,
-  status        ENUM('active','maintenance','inactive') NOT NULL DEFAULT 'active',
+  image_url           TEXT,
+  requires_approval   TINYINT(1)   NOT NULL DEFAULT 1,
+  pic_user_id         CHAR(36)     DEFAULT NULL,
+  status              ENUM('active','maintenance','inactive') NOT NULL DEFAULT 'active',
   location      VARCHAR(255),
   created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -162,3 +164,25 @@ SET @sql = IF(@col_exists = 0,
 PREPARE stmt FROM @sql;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
+
+-- ------------------------------------------------------------------
+-- In-app notifications
+-- ------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS notifications (
+  id          CHAR(36)     NOT NULL,
+  user_email  VARCHAR(255) NOT NULL,
+  type        VARCHAR(50)  NOT NULL,
+  title       VARCHAR(255) NOT NULL,
+  body        TEXT,
+  link        VARCHAR(255),
+  read_at     DATETIME     DEFAULT NULL,
+  created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_notifications_user_email (user_email),
+  INDEX idx_notifications_read_at (read_at),
+  INDEX idx_notifications_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Existing databases: run once if upgrading
+-- ALTER TABLE resources ADD COLUMN requires_approval TINYINT(1) NOT NULL DEFAULT 1 AFTER image_url;
+-- ALTER TABLE resources ADD COLUMN pic_user_id CHAR(36) DEFAULT NULL AFTER requires_approval;

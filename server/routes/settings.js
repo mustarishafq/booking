@@ -1,8 +1,10 @@
+import crypto from 'crypto';
 import { Router } from 'express';
 import pool from '../db.js';
 import { requireAdmin } from '../middleware/auth.js';
 import { sendTestMail } from '../emailer.js';
 import { sendTestWA } from '../whatsapp.js';
+import { sendTestWebhook, parseWebhooksForApi, serializeWebhooks, generateWebhookSecret } from '../webhooks.js';
 
 const router = Router();
 
@@ -17,7 +19,9 @@ const WA_KEYS = [
   'notify_wa_submitted', 'notify_wa_rejected', 'notify_wa_cancelled',
 ];
 
-const ALLOWED_KEYS = [...EMAIL_KEYS, ...WA_KEYS];
+const WEBHOOK_KEYS = ['webhooks'];
+
+const ALLOWED_KEYS = [...EMAIL_KEYS, ...WA_KEYS, ...WEBHOOK_KEYS];
 
 // GET /api/settings — load all settings (admin)
 router.get('/', requireAdmin, async (req, res) => {
@@ -30,6 +34,7 @@ router.get('/', requireAdmin, async (req, res) => {
     result.smtp_password = '';
     result.wa_token_set = !!(result.wa_token);
     result.wa_token = '';
+    result.webhooks = parseWebhooksForApi(result.webhooks, result);
     res.json(result);
   } catch (e) {
     res.status(500).json({ message: e.message });
@@ -46,9 +51,31 @@ router.patch('/', requireAdmin, async (req, res) => {
     for (const key of allowed) {
       // Never overwrite secrets with an empty string — blank means "keep existing"
       if ((key === 'smtp_password' || key === 'wa_token') && !updates[key]) continue;
+
+      let value = updates[key];
+      if (key === 'webhooks') {
+        const incoming = typeof value === 'string' ? JSON.parse(value) : value;
+        if (!Array.isArray(incoming)) {
+          return res.status(400).json({ message: 'webhooks must be an array' });
+        }
+        const existing = parseWebhooksForApi(
+          (await pool.query('SELECT `value` FROM settings WHERE `key` = ?', ['webhooks']))[0][0]?.value,
+        );
+        const existingById = Object.fromEntries(existing.map(w => [w.id, w]));
+
+        value = serializeWebhooks(incoming.map(wh => {
+          const prev = existingById[wh.id];
+          return {
+            ...wh,
+            id: wh.id || crypto.randomUUID(),
+            secret: wh.secret || prev?.secret || generateWebhookSecret(),
+          };
+        }));
+      }
+
       await pool.query(
         'INSERT INTO settings (`key`, `value`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `value` = VALUES(`value`)',
-        [key, String(updates[key])],
+        [key, String(value)],
       );
     }
     res.json({ ok: true });
@@ -81,6 +108,24 @@ router.post('/test-whatsapp', requireAdmin, async (req, res) => {
     const result = await sendTestWA(to);
     if (result.ok) {
       res.json({ ok: true, message: `Test message sent to ${to}` });
+    } else {
+      res.status(500).json({ ok: false, message: result.error });
+    }
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+});
+
+// POST /api/settings/test-webhook — send a test webhook payload (admin)
+router.post('/test-webhook', requireAdmin, async (req, res) => {
+  try {
+    const { webhookId, webhook } = req.body;
+    if (!webhookId && !webhook?.url) {
+      return res.status(400).json({ message: 'webhookId or webhook payload required' });
+    }
+    const result = await sendTestWebhook(webhookId, webhook);
+    if (result.ok) {
+      res.json({ ok: true, message: 'Test webhook delivered successfully.' });
     } else {
       res.status(500).json({ ok: false, message: result.error });
     }

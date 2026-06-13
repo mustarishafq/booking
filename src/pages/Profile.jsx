@@ -7,7 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
-import { User, KeyRound, CheckCircle2, AlertCircle } from 'lucide-react';
+import { User, KeyRound, CheckCircle2, AlertCircle, LogOut } from 'lucide-react';
+import PageHeader from '@/components/layout/PageHeader';
 
 export default function Profile() {
   const { user, setUser } = useOutletContext();
@@ -53,12 +54,13 @@ export default function Profile() {
 
   return (
     <div className="max-w-xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Profile</h1>
-        <p className="text-muted-foreground mt-1">Manage your account details</p>
-      </div>
+      <PageHeader
+        icon={User}
+        title="Profile"
+        description="Manage your account details"
+      />
 
-      <Card>
+      <Card className="rounded-2xl border border-border">
         <CardHeader>
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -70,26 +72,27 @@ export default function Profile() {
             </div>
           </div>
         </CardHeader>
-        <CardContent className="space-y-5">
+        <CardContent className="space-y-6">
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <Label>Display Name</Label>
+              <Label className="text-sm font-medium">Display Name</Label>
               <Input value={fullName} onChange={e => setFullName(e.target.value)} placeholder="Your name" />
             </div>
             <div className="space-y-1.5">
-              <Label>WhatsApp Phone Number</Label>
+              <Label className="text-sm font-medium">WhatsApp Phone Number</Label>
               <Input value={phone} onChange={e => setPhone(e.target.value)} placeholder="e.g. 60123456789 (no +)" />
             </div>
             <Button
               onClick={saveProfile}
               disabled={saving || (fullName === user?.full_name && phone === (user?.phone || ''))}
+              className="shadow-md shadow-primary/20 hover:shadow-primary/30"
             >
               Save Profile
             </Button>
             {nameStatus && (
-              <Alert variant={nameStatus.ok ? 'default' : 'destructive'} className="py-2">
-                {nameStatus.ok ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
-                <AlertDescription>{nameStatus.msg}</AlertDescription>
+              <Alert variant={nameStatus.ok ? 'default' : 'destructive'} className={nameStatus.ok ? 'rounded-xl border border-success/30 bg-success/5' : 'rounded-xl'}>
+                {nameStatus.ok ? <CheckCircle2 className="h-4 w-4 text-success" /> : <AlertCircle className="h-4 w-4" />}
+                <AlertDescription className={nameStatus.ok ? 'text-success' : undefined}>{nameStatus.msg}</AlertDescription>
               </Alert>
             )}
           </div>
@@ -99,20 +102,29 @@ export default function Profile() {
           <div className="space-y-3">
             <div className="flex items-center gap-2">
               <KeyRound className="w-4 h-4 text-muted-foreground" />
-              <Label>Change Password</Label>
+              <Label className="text-sm font-medium">Change Password</Label>
             </div>
             <Input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="New password (min 8 chars)" />
             <Input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Confirm new password" />
             <Button onClick={savePassword} disabled={saving || !newPassword}>Update Password</Button>
             {pwStatus && (
-              <Alert variant={pwStatus.ok ? 'default' : 'destructive'} className="py-2">
-                {pwStatus.ok ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
-                <AlertDescription>{pwStatus.msg}</AlertDescription>
+              <Alert variant={pwStatus.ok ? 'default' : 'destructive'} className={pwStatus.ok ? 'rounded-xl border border-success/30 bg-success/5' : 'rounded-xl'}>
+                {pwStatus.ok ? <CheckCircle2 className="h-4 w-4 text-success" /> : <AlertCircle className="h-4 w-4" />}
+                <AlertDescription className={pwStatus.ok ? 'text-success' : undefined}>{pwStatus.msg}</AlertDescription>
               </Alert>
             )}
           </div>
         </CardContent>
       </Card>
+
+      <Button
+        variant="outline"
+        className="w-full text-destructive hover:text-destructive hover:bg-destructive/5"
+        onClick={() => db.auth.logout()}
+      >
+        <LogOut className="w-4 h-4 mr-2" />
+        Sign Out
+      </Button>
     </div>
   );
 }

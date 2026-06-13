@@ -1,7 +1,7 @@
 import { db } from '@/api/base44Client';
 
 import React, { useState } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { Card, CardContent } from '@/components/ui/card';
@@ -21,8 +21,11 @@ import { format } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
 import { RoleBadge } from '@/pages/Roles';
 import { hasPermission } from '@/lib/permissions';
+import PageHeader from '@/components/layout/PageHeader';
+import EmptyState from '@/components/ui/EmptyState';
+import { statColorMap } from '@/lib/bookingUtils';
 
-function UserAvatar({ name, email, size = 'md', color = 'primary' }) {
+function UserAvatar({ name, email, size = 'md' }) {
   const initials = name
     ? name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
     : (email?.[0] || '?').toUpperCase();
@@ -35,21 +38,15 @@ function UserAvatar({ name, email, size = 'md', color = 'primary' }) {
 }
 
 function StatCard({ icon: Icon, label, value, sub, color = 'primary' }) {
-  const colors = {
-    primary: 'bg-primary/10 text-primary',
-    amber: 'bg-amber-100 text-amber-600',
-    emerald: 'bg-emerald-100 text-emerald-600',
-    violet: 'bg-violet-100 text-violet-600',
-  };
   return (
-    <Card>
+    <Card className="rounded-2xl border border-border hover:shadow-lg hover:shadow-primary/5 transition-all duration-300">
       <CardContent className="p-4 flex items-center gap-4">
-        <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${colors[color]}`}>
+        <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${statColorMap[color] || statColorMap.primary}`}>
           <Icon className="w-5 h-5" />
         </div>
         <div>
-          <p className="text-2xl font-bold leading-none">{value}</p>
-          <p className="text-xs text-muted-foreground mt-1">{label}</p>
+          <p className="text-2xl font-bold leading-none tracking-tight">{value}</p>
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mt-1">{label}</p>
           {sub && <p className="text-xs text-muted-foreground/70 mt-0.5">{sub}</p>}
         </div>
       </CardContent>
@@ -60,8 +57,9 @@ function StatCard({ icon: Icon, label, value, sub, color = 'primary' }) {
 export default function Users() {
   const { user } = useOutletContext();
   const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
   const [search, setSearch] = useState('');
-  const [tabFilter, setTabFilter] = useState('all'); // 'all' | 'pending' | 'admin' | 'internal'
+  const [tabFilter, setTabFilter] = useState(() => searchParams.get('tab') || 'all');
   const [showInvite, setShowInvite] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState('user');
@@ -159,7 +157,7 @@ export default function Users() {
 
   const TABS = [
     { key: 'all',      label: 'All',      count: users.length },
-    { key: 'pending',  label: 'Pending',  count: pendingCount,  dot: 'bg-amber-500' },
+    { key: 'pending',  label: 'Pending',  count: pendingCount,  dot: 'bg-warning' },
     { key: 'admin',    label: 'Admins',   count: adminCount },
     { key: 'internal', label: 'Internal', count: internalCount },
   ];
@@ -170,26 +168,26 @@ export default function Users() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Users</h1>
-          <p className="text-muted-foreground mt-1">Manage users, roles and access</p>
-        </div>
-        {hasPermission(user, 'manage_users') && (
-          <Button onClick={() => setShowInvite(true)} className="flex-shrink-0">
-            <UserPlus className="w-4 h-4 mr-2" /> Invite User
-          </Button>
-        )}
-      </div>
+      <PageHeader
+        icon={UsersIcon}
+        title="Users"
+        description="Manage users, roles and access"
+        actions={
+          hasPermission(user, 'manage_users') ? (
+            <Button onClick={() => setShowInvite(true)} className="gap-2 w-full sm:w-auto shadow-md shadow-primary/20 hover:shadow-primary/30">
+              <UserPlus className="w-4 h-4" />
+              Invite User
+            </Button>
+          ) : null
+        }
+      />
 
-      {/* Stats */}
       {!isLoading && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <StatCard icon={UsersIcon}   label="Total Users"     value={users.length}    color="primary" />
-          <StatCard icon={Clock}       label="Pending"         value={pendingCount}    color="amber" />
-          <StatCard icon={Shield}      label="Admins"          value={adminCount}      color="violet" />
-          <StatCard icon={Building2}   label="Internal"        value={internalCount}   color="emerald" />
+          <StatCard icon={Clock}       label="Pending"         value={pendingCount}    color="warning" />
+          <StatCard icon={Shield}      label="Admins"          value={adminCount}      color="accent" />
+          <StatCard icon={Building2}   label="Internal"        value={internalCount}   color="success" />
         </div>
       )}
 
@@ -223,20 +221,16 @@ export default function Users() {
       {isLoading ? (
         <div className="space-y-2">{[1,2,3,4].map(i => <Skeleton key={i} className="h-16 rounded-xl" />)}</div>
       ) : tabFiltered.length === 0 ? (
-        <div className="text-center py-16 text-muted-foreground">
-          <UsersIcon className="w-10 h-10 mx-auto mb-3 opacity-20" />
-          <p>No users found</p>
-        </div>
+        <EmptyState icon={UsersIcon} title="No users found" />
       ) : (
-        <div className="rounded-xl border overflow-hidden divide-y bg-card">
-          {/* Pending users */}
+        <div className="rounded-2xl border border-border overflow-hidden divide-y divide-border bg-card">
           {pendingUsers.map(u => (
-            <div key={u.id} className="flex items-center gap-3 px-4 py-3 bg-amber-50/60">
+            <div key={u.id} className="flex items-center gap-3 px-4 py-3 bg-warning/5 border-b border-warning/10">
               <UserAvatar name={u.full_name} email={u.email} />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <p className="font-medium text-sm truncate">{u.full_name || <span className="italic text-muted-foreground font-normal">No name</span>}</p>
-                  <Badge className="bg-amber-100 text-amber-700 border-amber-200 text-xs h-4 px-1.5">Pending</Badge>
+                  <Badge className="bg-warning/10 text-warning border-warning/30 text-xs h-4 px-1.5">Pending</Badge>
                 </div>
                 <p className="text-xs text-muted-foreground truncate mt-0.5">{u.email}</p>
               </div>
@@ -244,7 +238,7 @@ export default function Users() {
                 {u.created_at ? format(new Date(u.created_at), 'MMM d, yyyy') : '—'}
               </p>
               <div className="flex gap-2 flex-shrink-0">
-                <Button size="sm" className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700" disabled={!!actionLoading} onClick={() => handleApprove(u.id)}>
+                <Button size="sm" className="h-7 text-xs" disabled={!!actionLoading} onClick={() => handleApprove(u.id)}>
                   {actionLoading === u.id + '_approve' ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3 mr-1" />}
                   Approve
                 </Button>
@@ -275,7 +269,7 @@ export default function Users() {
                       </Badge>
                     )}
                     {isInternal && (
-                      <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-1.5 py-0.5">
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-success bg-success/10 border border-success/30 rounded-full px-1.5 py-0.5">
                         <Building2 className="w-2.5 h-2.5" /> Internal
                       </span>
                     )}
@@ -284,7 +278,7 @@ export default function Users() {
                 </div>
                 <div className="hidden md:flex flex-col items-end text-right flex-shrink-0 gap-0.5">
                   {isInternal ? (
-                    <span className="text-xs font-medium text-emerald-600">Free</span>
+                    <span className="text-xs font-medium text-success">Free</span>
                   ) : (
                     <span className="text-sm font-semibold">RM{((u.credit_balance_cents || 0) / 100).toFixed(2)}</span>
                   )}
@@ -346,7 +340,7 @@ export default function Users() {
                     {editUser?.role || 'user'}
                   </Badge>
                   {editUser?.user_type === 'internal' && (
-                    <span className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-1.5 py-0.5">Internal</span>
+                    <span className="text-xs text-success bg-success/10 border border-success/30 rounded-full px-1.5 py-0.5">Internal</span>
                   )}
                 </div>
               </div>

@@ -16,6 +16,8 @@ import authRouter from './routes/auth.js';
 import usersRouter from './routes/users.js';
 import settingsRouter from './routes/settings.js';
 import rolesRouter from './routes/roles.js';
+import notificationsRouter from './routes/notifications.js';
+import uploadRouter from './routes/upload.js';
 import { createEntityRouter } from './routes/entities.js';
 
 const app  = express();
@@ -50,6 +52,13 @@ app.use('/api/settings',     settingsRouter);
 
 // Roles (admin)
 app.use('/api/roles',        rolesRouter);
+
+// In-app notifications
+app.use('/api/notifications', notificationsRouter);
+
+// File uploads
+app.use('/api/upload', uploadRouter);
+app.use('/api/uploads', express.static(join(__dirname, 'uploads')));
 
 // Generic entity CRUD
 app.use('/api/resources',    createEntityRouter('resources'));
