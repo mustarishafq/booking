@@ -90,7 +90,7 @@ export function serializeWebhooks(webhooks) {
   );
 }
 
-async function deliverWebhook(wh, event, booking, userSsoId = null) {
+async function deliverWebhook(wh, event, booking) {
   const payload = {
     event,
     timestamp: new Date().toISOString(),
@@ -107,14 +107,13 @@ async function deliverWebhook(wh, event, booking, userSsoId = null) {
       cost_cents: booking.cost_cents,
       booked_by_email: booking.booked_by_email,
       booked_by_name: booking.booked_by_name,
-      sso_id: userSsoId,
     },
   };
 
   const secret = wh.secret || generateWebhookSecret();
   const headers = {
     'Content-Type': 'application/json',
-    'User-Agent': 'EMZI-Nexus-Booking-Webhooks/1.0',
+    'User-Agent': 'BookHub-Webhooks/1.0',
     'X-Webhook-Secret': secret,
   };
 
@@ -143,21 +142,12 @@ export async function sendBookingWebhook(triggerKey, event, booking) {
     const eventKey = TRIGGER_TO_EVENT[triggerKey];
     if (!eventKey) return { ok: false, error: 'Unknown trigger' };
 
-    let userSsoId = null;
-    if (booking.booked_by_email) {
-      const [rows] = await pool.query(
-        'SELECT nexus_sso_id FROM users WHERE email = ? LIMIT 1',
-        [booking.booked_by_email],
-      );
-      userSsoId = rows[0]?.nexus_sso_id || null;
-    }
-
     const webhooks = await loadWebhooks();
     const active = webhooks.filter(w => w.enabled && w.url && w.events[eventKey]);
     if (!active.length) return { ok: false, error: 'No matching webhooks' };
 
     const results = await Promise.all(
-      active.map(w => deliverWebhook(w, event, booking, userSsoId).catch(e => ({ ok: false, error: e.message, webhookId: w.id }))),
+      active.map(w => deliverWebhook(w, event, booking).catch(e => ({ ok: false, error: e.message, webhookId: w.id }))),
     );
 
     const failed = results.filter(r => !r.ok);

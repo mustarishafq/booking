@@ -1,6 +1,6 @@
 import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
 import { db, getToken, clearToken } from '@/api/base44Client';
-import { getPostLogoutUrl, clearAuthViaNexus } from '@/lib/nexusBrain';
+import { getPostLogoutUrl } from '@/lib/nexusBrain';
 
 const AuthContext = createContext();
 
@@ -30,7 +30,6 @@ export const AuthProvider = ({ children }) => {
       setAuthError(null);
     } catch (error) {
       clearToken();
-      clearAuthViaNexus();
       console.error('User auth check failed:', error);
       setIsLoadingAuth(false);
       setIsAuthenticated(false);
@@ -72,7 +71,6 @@ export const AuthProvider = ({ children }) => {
 
   const logout = (shouldRedirect = true) => {
     clearToken();
-    clearAuthViaNexus();
     setUser(null);
     setIsAuthenticated(false);
     setAuthError(null);

@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { setToken } from '@/api/base44Client';
-import { resolveSsoRedirect } from '@/lib/ssoRedirect';
-import { markAuthViaNexus } from '@/lib/nexusBrain';
+import { resolveAppRedirect } from '@/lib/ssoRedirect';
+import { setReturnTo } from '@/lib/nexusBrain';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, AlertCircle } from 'lucide-react';
 import AppLogo from '@/components/layout/AppLogo';
@@ -24,23 +24,24 @@ export default function SsoNexus() {
       return;
     }
 
-    const redirectTo = resolveSsoRedirect(searchParams);
+    const redirectTo = resolveAppRedirect(searchParams);
+    const returnTo = searchParams.get('return_to');
 
     (async () => {
       try {
         const res = await fetch(`${API_BASE}/sso/nexus/verify`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token, redirect_to: redirectTo }),
+          body: JSON.stringify({ token, redirect_to: redirectTo, return_to: returnTo }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.message || 'SSO verification failed');
 
+        if (data.return_to) setReturnTo(data.return_to);
+
         setToken(data.token);
-        markAuthViaNexus();
 
         const dest = data.redirect_to || redirectTo || '/';
-        // Full reload so AuthContext picks up the new token (client navigate leaves stale auth state).
         window.location.replace(dest.startsWith('/') ? dest : '/');
       } catch (err) {
         setError(err.message);

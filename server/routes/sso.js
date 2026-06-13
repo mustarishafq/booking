@@ -134,11 +134,14 @@ router.post('/nexus/verify', async (req, res) => {
       FRONTEND_URL,
     );
 
+    const returnTo = String(req.body.return_to || payload.return_to || '').trim() || null;
+
     const enriched = await enrichUser(user);
     res.json({
       token: makeToken(user),
       user: enriched,
       redirect_to: redirectTo,
+      return_to: returnTo,
     });
   } catch (e) {
     res.status(500).json({ message: e.message });

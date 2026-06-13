@@ -2,21 +2,20 @@ const DEFAULT_URL = 'https://emzinexus.com';
 
 export const NEXUS_BRAIN_URL = (import.meta.env.VITE_NEXUS_BRAIN_URL || DEFAULT_URL).replace(/\/$/, '');
 
-export const AUTH_VIA_NEXUS_KEY = 'booking_auth_via_nexus';
+const RETURN_TO_KEY = 'booking_sso_return_to';
 
 export function getNexusBrainUrl() {
   return NEXUS_BRAIN_URL;
 }
 
-/** Where users return after signing out of this app. */
+export function setReturnTo(url) {
+  if (url) localStorage.setItem(RETURN_TO_KEY, url);
+}
+
+export function getReturnTo() {
+  return localStorage.getItem(RETURN_TO_KEY);
+}
+
 export function getPostLogoutUrl() {
-  return NEXUS_BRAIN_URL;
-}
-
-export function markAuthViaNexus() {
-  localStorage.setItem(AUTH_VIA_NEXUS_KEY, '1');
-}
-
-export function clearAuthViaNexus() {
-  localStorage.removeItem(AUTH_VIA_NEXUS_KEY);
+  return getReturnTo() || NEXUS_BRAIN_URL;
 }
