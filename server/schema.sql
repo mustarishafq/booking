@@ -6,7 +6,7 @@ CREATE DATABASE IF NOT EXISTS nexus_booking
   CHARACTER SET utf8mb4
   COLLATE utf8mb4_unicode_ci;
 
-USE booking;
+USE nexus_booking;
 
 -- ------------------------------------------------------------------
 -- Users
