@@ -1,5 +1,6 @@
 /**
  * Sanitize post-login redirect paths from SSO query params or JWT claims.
+ * Returns a relative path or an absolute URL on an allowed frontend origin.
  */
 export function sanitizeSsoRedirect(path, frontendUrl) {
   if (!path || typeof path !== 'string') return '/';
@@ -12,13 +13,13 @@ export function sanitizeSsoRedirect(path, frontendUrl) {
     return trimmed;
   }
 
+  const allowed = (frontendUrl || '')
+    .split(',')
+    .map(o => o.trim())
+    .filter(Boolean);
+
   try {
     const url = new URL(trimmed);
-    const allowed = (frontendUrl || '')
-      .split(',')
-      .map(o => o.trim())
-      .filter(Boolean);
-
     for (const origin of allowed) {
       try {
         if (new URL(origin).origin === url.origin) {

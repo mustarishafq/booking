@@ -1,6 +1,36 @@
 import crypto from 'crypto';
 import pool from './db.js';
 
+const FRONTEND_URL = (process.env.FRONTEND_URL || 'http://localhost:5173').split(',')[0].trim().replace(/\/$/, '');
+
+const EVENT_META = {
+  'booking.submitted': {
+    type: 'info',
+    category: 'approval',
+    recipientKeys: ['pic'],
+  },
+  'booking.confirmed': {
+    type: 'success',
+    category: 'approval',
+    recipientKeys: ['booker'],
+  },
+  'booking.rejected': {
+    type: 'error',
+    category: 'approval',
+    recipientKeys: ['booker'],
+  },
+  'booking.cancelled': {
+    type: 'warning',
+    category: 'task',
+    recipientKeys: ['booker', 'pic'],
+  },
+  'webhook.test': {
+    type: 'info',
+    category: 'system',
+    recipientKeys: ['booker'],
+  },
+};
+
 const TRIGGER_TO_EVENT = {
   notify_webhook_submitted: 'submitted',
   notify_webhook_confirmed: 'confirmed',
@@ -90,11 +120,67 @@ export function serializeWebhooks(webhooks) {
   );
 }
 
-async function deliverWebhook(wh, event, booking) {
-  const payload = {
+async function getNexusSsoIdByEmail(email) {
+  if (!email) return null;
+  const [rows] = await pool.query(
+    'SELECT nexus_sso_id FROM users WHERE LOWER(email) = ? LIMIT 1',
+    [email.toLowerCase()],
+  );
+  return rows[0]?.nexus_sso_id || null;
+}
+
+async function getResourcePicNexusSsoId(resourceId) {
+  if (!resourceId) return null;
+  const [rows] = await pool.query(
+    `SELECT u.nexus_sso_id
+     FROM resources r
+     INNER JOIN users u ON u.id = r.pic_user_id
+     WHERE r.id = ?
+     LIMIT 1`,
+    [resourceId],
+  );
+  return rows[0]?.nexus_sso_id || null;
+}
+
+async function resolveBookingContext(booking) {
+  const [bookerSsoId, picSsoId] = await Promise.all([
+    getNexusSsoIdByEmail(booking.booked_by_email),
+    getResourcePicNexusSsoId(booking.resource_id),
+  ]);
+  return { bookerSsoId, picSsoId };
+}
+
+function buildActionUrl(booking) {
+  const path = booking?.id ? `/bookings?booking=${encodeURIComponent(booking.id)}` : '/bookings';
+  return `${FRONTEND_URL}${path}`;
+}
+
+function resolveRecipientSsoIds(meta, context) {
+  const { bookerSsoId, picSsoId } = context;
+  const byKey = { booker: bookerSsoId, pic: picSsoId };
+  const seen = new Set();
+  const ids = [];
+
+  for (const key of meta.recipientKeys || []) {
+    const id = byKey[key];
+    if (id && !seen.has(id)) {
+      seen.add(id);
+      ids.push(id);
+    }
+  }
+
+  return ids.length ? ids : [null];
+}
+
+function buildWebhookPayload(event, wh, booking, meta, nexusSsoId) {
+  return {
     event,
     timestamp: new Date().toISOString(),
     webhook_id: wh.id,
+    type: meta.type,
+    category: meta.category,
+    action_url: buildActionUrl(booking),
+    nexus_sso_id: nexusSsoId,
     booking: {
       id: booking.id,
       title: booking.title,
@@ -109,6 +195,10 @@ async function deliverWebhook(wh, event, booking) {
       booked_by_name: booking.booked_by_name,
     },
   };
+}
+
+async function deliverWebhook(wh, event, booking, meta, nexusSsoId) {
+  const payload = buildWebhookPayload(event, wh, booking, meta, nexusSsoId);
 
   const secret = wh.secret || generateWebhookSecret();
   const headers = {
@@ -142,12 +232,22 @@ export async function sendBookingWebhook(triggerKey, event, booking) {
     const eventKey = TRIGGER_TO_EVENT[triggerKey];
     if (!eventKey) return { ok: false, error: 'Unknown trigger' };
 
+    const meta = EVENT_META[event] || { type: 'info', category: 'other', recipientKeys: ['booker'] };
+    const context = await resolveBookingContext(booking);
+    const recipientIds = resolveRecipientSsoIds(meta, context);
+
     const webhooks = await loadWebhooks();
     const active = webhooks.filter(w => w.enabled && w.url && w.events[eventKey]);
     if (!active.length) return { ok: false, error: 'No matching webhooks' };
 
+    const deliveries = active.flatMap(w =>
+      recipientIds.map(nexusSsoId => ({ w, nexusSsoId })),
+    );
+
     const results = await Promise.all(
-      active.map(w => deliverWebhook(w, event, booking).catch(e => ({ ok: false, error: e.message, webhookId: w.id }))),
+      deliveries.map(({ w, nexusSsoId }) =>
+        deliverWebhook(w, event, booking, meta, nexusSsoId).catch(e => ({ ok: false, error: e.message, webhookId: w.id })),
+      ),
     );
 
     const failed = results.filter(r => !r.ok);
@@ -174,7 +274,7 @@ export async function sendTestWebhook(webhookId, webhookOverride) {
     if (!wh) return { ok: false, error: 'Webhook not found — save your webhooks first, or check the URL is filled in.' };
     if (!wh.url) return { ok: false, error: 'Webhook URL not configured' };
 
-    return deliverWebhook(wh, 'webhook.test', {
+    const testBooking = {
       id: 'test-booking-id',
       title: 'Test Booking',
       resource_id: 'test-resource',
@@ -186,7 +286,9 @@ export async function sendTestWebhook(webhookId, webhookOverride) {
       cost_cents: 0,
       booked_by_email: 'test@example.com',
       booked_by_name: 'Test User',
-    });
+    };
+    const meta = EVENT_META['webhook.test'];
+    return deliverWebhook(wh, 'webhook.test', testBooking, meta, 'test-nexus-sso-id');
   } catch (e) {
     return { ok: false, error: e.message };
   }

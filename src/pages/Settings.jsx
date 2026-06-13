@@ -19,6 +19,7 @@ import PageHeader from '@/components/layout/PageHeader';
 import EmptyState from '@/components/ui/EmptyState';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
@@ -594,7 +595,7 @@ function WebhookSecretField({ secret, onRegenerate }) {
   );
 }
 
-function WebhookCard({ webhook, index, onChange, onRemove, onTest, testing, testStatus }) {
+function WebhookCard({ webhook, index, onChange, onRemove, onTest, testing }) {
   const update = (patch) => onChange({ ...webhook, ...patch });
   const updateEvent = (key, enabled) => onChange({ ...webhook, events: { ...webhook.events, [key]: enabled } });
 
@@ -638,20 +639,17 @@ function WebhookCard({ webhook, index, onChange, onRemove, onTest, testing, test
         </div>
       </div>
 
-      <div className="flex flex-col gap-2 md:flex-row md:items-start">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => onTest(webhook)}
-          disabled={testing || !webhook.url}
-          className="w-full md:w-auto shrink-0"
-        >
-          <Send className="w-4 h-4 mr-1.5" />
-          {testing ? 'Sending…' : 'Send Test'}
-        </Button>
-        <StatusAlert status={testStatus} className="md:flex-1" />
-      </div>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={() => onTest(webhook)}
+        disabled={testing || !webhook.url}
+        className="w-full md:w-auto"
+      >
+        <Send className="w-4 h-4 mr-1.5" />
+        {testing ? 'Sending…' : 'Send Test'}
+      </Button>
     </div>
   );
 }
@@ -842,7 +840,6 @@ function NexusSsoSettings() {
 function WebhookSettings() {
   const [webhooks, setWebhooks] = useState([]);
   const [status, setStatus] = useState(null);
-  const [testStatuses, setTestStatuses] = useState({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testingId, setTestingId] = useState(null);
@@ -878,7 +875,6 @@ function WebhookSettings() {
 
   const sendTest = async (webhook) => {
     setTestingId(webhook.id);
-    setTestStatuses(s => ({ ...s, [webhook.id]: null }));
     try {
       const res = await fetch(`${API_BASE}/settings/test-webhook`, {
         method: 'POST',
@@ -887,12 +883,11 @@ function WebhookSettings() {
       });
       const data = await res.json();
       const ok = res.ok && data.ok !== false;
-      setTestStatuses(s => ({
-        ...s,
-        [webhook.id]: { ok, msg: data.message || data.msg || (ok ? 'Test webhook delivered.' : 'Request failed') },
-      }));
+      const message = data.message || data.msg || (ok ? 'Test webhook delivered successfully.' : 'Request failed');
+      if (ok) toast.success(message);
+      else toast.error(message);
     } catch (e) {
-      setTestStatuses(s => ({ ...s, [webhook.id]: { ok: false, msg: e.message } }));
+      toast.error(e.message);
     } finally {
       setTestingId(null);
     }
@@ -931,7 +926,6 @@ function WebhookSettings() {
               onRemove={() => removeWebhook(i)}
               onTest={sendTest}
               testing={testingId === wh.id}
-              testStatus={testStatuses[wh.id]}
             />
           ))}
         </div>

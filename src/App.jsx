@@ -78,7 +78,7 @@ function App() {
               <Route path="/*" element={<AuthenticatedApp />} />
             </Routes>
           </Router>
-          <Toaster richColors closeButton />
+          <Toaster />
         </QueryClientProvider>
       </AuthProvider>
     </ThemeProvider>

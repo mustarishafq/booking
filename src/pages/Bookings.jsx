@@ -10,12 +10,11 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { format } from 'date-fns';
 import {
   Plus, Search, XCircle, Calendar, Clock, CheckCircle2, Ban, BookOpen, User,
-  ChevronDown, SlidersHorizontal, X, AlertCircle, History,
+  X, AlertCircle, History,
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { hasPermission } from '@/lib/permissions';
@@ -64,7 +63,6 @@ export default function Bookings() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState(() => searchParams.get('status') || 'all');
   const [userFilter, setUserFilter] = useState('all');
-  const [filtersOpen, setFiltersOpen] = useState(false);
   const [viewTab, setViewTab] = useState(() => (
     searchParams.get('status') === 'pending' ? 'all' : 'upcoming'
   ));
@@ -200,7 +198,7 @@ export default function Bookings() {
     <>
       {(seeAll && bookers.length > 0) && (
         <Select value={userFilter} onValueChange={setUserFilter}>
-          <SelectTrigger className="w-full">
+          <SelectTrigger className="w-[9.5rem] sm:w-[11rem] shrink-0">
             <SelectValue placeholder="All users" />
           </SelectTrigger>
           <SelectContent>
@@ -214,7 +212,7 @@ export default function Bookings() {
         </Select>
       )}
       <Select value={statusFilter} onValueChange={setStatusFilter}>
-        <SelectTrigger className="w-full"><SelectValue placeholder="All status" /></SelectTrigger>
+        <SelectTrigger className="w-[7.5rem] sm:w-[8.5rem] shrink-0"><SelectValue placeholder="All status" /></SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All status</SelectItem>
           {['confirmed', 'pending', 'cancelled', 'rejected', 'completed'].map(s => (
@@ -287,36 +285,19 @@ export default function Bookings() {
           })}
         </div>
 
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-          <Input
-            className="pl-9"
-            placeholder={seeAll ? 'Search title, resource, user name or email…' : 'Search bookings…'}
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
-        </div>
-
-        <Collapsible open={filtersOpen} onOpenChange={setFiltersOpen} className="lg:hidden">
-          <CollapsibleTrigger asChild>
-            <Button variant="outline" className="w-full justify-between h-10">
-              <span className="flex items-center gap-2">
-                <SlidersHorizontal className="w-4 h-4" />
-                Filters
-                {activeFilterCount > 0 && (
-                  <Badge variant="secondary" className="h-5 px-1.5 text-xs">{activeFilterCount}</Badge>
-                )}
-              </span>
-              <ChevronDown className={cn('w-4 h-4 transition-transform', filtersOpen && 'rotate-180')} />
-            </Button>
-          </CollapsibleTrigger>
-          <CollapsibleContent className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3">
+        <div className="flex gap-2 sm:gap-3 items-center">
+          <div className="relative flex-1 min-w-0">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+            <Input
+              className="pl-9"
+              placeholder={seeAll ? 'Search title, resource, user name or email…' : 'Search bookings…'}
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+          </div>
+          <div className="flex gap-2 shrink-0">
             {filterControls}
-          </CollapsibleContent>
-        </Collapsible>
-
-        <div className="hidden lg:grid lg:grid-cols-2 xl:grid-cols-3 gap-3">
-          {filterControls}
+          </div>
         </div>
 
         {!isLoading && (

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { setToken } from '@/api/base44Client';
-import { resolveAppRedirect } from '@/lib/ssoRedirect';
+import { readRedirectTo, applySsoRedirect } from '@/lib/ssoRedirect';
 import { setReturnTo } from '@/lib/nexusBrain';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, AlertCircle } from 'lucide-react';
@@ -24,7 +24,7 @@ export default function SsoNexus() {
       return;
     }
 
-    const redirectTo = resolveAppRedirect(searchParams);
+    const redirectTo = readRedirectTo(searchParams);
     const returnTo = searchParams.get('return_to');
 
     (async () => {
@@ -41,8 +41,7 @@ export default function SsoNexus() {
 
         setToken(data.token);
 
-        const dest = data.redirect_to || redirectTo || '/';
-        window.location.replace(dest.startsWith('/') ? dest : '/');
+        window.location.replace(applySsoRedirect(data.redirect_to, '/'));
       } catch (err) {
         setError(err.message);
         started.current = false;

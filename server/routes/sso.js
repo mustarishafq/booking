@@ -130,7 +130,7 @@ router.post('/nexus/verify', async (req, res) => {
     }
 
     const redirectTo = sanitizeSsoRedirect(
-      req.body.redirect_to || payload.redirect_to,
+      req.body.redirect_to ?? payload.redirect_to,
       FRONTEND_URL,
     );
 
