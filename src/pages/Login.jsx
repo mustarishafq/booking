@@ -3,12 +3,12 @@ import { setToken } from '@/api/base44Client';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { toast } from 'sonner';
 import ThemeToggle from '@/components/layout/ThemeToggle';
 import AppLogo from '@/components/layout/AppLogo';
 import { APP_NAME } from '@/lib/appConfig';
-import { getNexusBrainUrl } from '@/lib/nexusBrain';
-import { Loader2, CheckCircle2, Eye, EyeOff, Mail, Lock, AlertCircle } from 'lucide-react';
+import { getNexusBrainUrl, markDirectLogin } from '@/lib/nexusBrain';
+import { Loader2, CheckCircle2, Eye, EyeOff, Mail, Lock } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
@@ -17,12 +17,11 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
   const [pending, setPending] = useState(false);
   const [forgotSent, setForgotSent] = useState(false);
   const [mode, setMode] = useState('signin');
 
-  const switchMode = (m) => { setMode(m); setError(''); setForgotSent(false); setShowPassword(false); };
+  const switchMode = (m) => { setMode(m); setForgotSent(false); setShowPassword(false); };
 
   const redirectAfterLogin = () => {
     const redirect = new URLSearchParams(window.location.search).get('redirect');
@@ -32,7 +31,6 @@ export default function Login() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
     try {
       if (mode === 'forgot') {
         const res = await fetch(`${API_BASE}/auth/forgot-password`, {
@@ -53,10 +51,11 @@ export default function Login() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Request failed');
       if (data.pending) { setPending(true); return; }
+      markDirectLogin();
       setToken(data.token);
       redirectAfterLogin();
     } catch (err) {
-      setError(err.message);
+      toast.error(err.message);
     } finally {
       setLoading(false);
     }
@@ -175,12 +174,6 @@ export default function Login() {
               </div>
             ) : (
               <>
-                {error && (
-                  <Alert variant="destructive" className="mb-5 rounded-xl border border-destructive/30 bg-destructive/5">
-                    <AlertCircle className="w-4 h-4" />
-                    <AlertDescription>{error}</AlertDescription>
-                  </Alert>
-                )}
                 <form onSubmit={handleSubmit} className="space-y-5">
                   <div className="space-y-1.5">
                     <Label htmlFor="email" className="text-sm font-medium">Email address</Label>

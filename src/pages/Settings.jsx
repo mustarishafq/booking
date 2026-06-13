@@ -11,10 +11,15 @@ import { Switch } from '@/components/ui/switch';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
-  Shield, CheckCircle2, AlertCircle, Mail, Send, Bell, X,
+  Shield, CheckCircle2, Mail, Send, Bell, X,
   MessageCircle, Settings as SettingsIcon, Webhook, Plus, Trash2,
-  Eye, EyeOff, Copy, RefreshCw, KeyRound,
+  Eye, EyeOff, Copy, RefreshCw, KeyRound, Database, Loader2, ScrollText,
 } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import PageHeader from '@/components/layout/PageHeader';
 import EmptyState from '@/components/ui/EmptyState';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -112,27 +117,6 @@ function SaveButton({ onClick, disabled, saving, label = 'Save Settings' }) {
     >
       {saving ? 'Saving…' : label}
     </Button>
-  );
-}
-
-function StatusAlert({ status, className }) {
-  if (!status) return null;
-  return (
-    <div
-      role="alert"
-      className={cn(
-        'flex items-center gap-2.5 rounded-xl border px-3.5 py-2.5 text-sm',
-        status.ok
-          ? 'border-success/30 bg-success/5 text-success'
-          : 'border-destructive/30 bg-destructive/5 text-destructive',
-        className,
-      )}
-    >
-      {status.ok
-        ? <CheckCircle2 className="h-4 w-4 shrink-0" />
-        : <AlertCircle className="h-4 w-4 shrink-0" />}
-      <span className="leading-snug">{status.msg}</span>
-    </div>
   );
 }
 
@@ -241,8 +225,6 @@ function EmailSettings() {
     notify_cancelled: JSON.stringify({ ...DEFAULT_NOTIFY, recipients: 'both' }),
   });
   const [testTo, setTestTo] = useState('');
-  const [status, setStatus] = useState(null);
-  const [testStatus, setTestStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -256,7 +238,6 @@ function EmailSettings() {
 
   const save = async () => {
     setSaving(true);
-    setStatus(null);
     try {
       const res = await fetch(`${API_BASE}/settings`, {
         method: 'PATCH',
@@ -264,9 +245,9 @@ function EmailSettings() {
         body: JSON.stringify(cfg),
       });
       if (!res.ok) throw new Error((await res.json()).message);
-      setStatus({ ok: true, msg: 'Settings saved.' });
+      toast.success('Settings saved.');
     } catch (e) {
-      setStatus({ ok: false, msg: e.message });
+      toast.error(e.message);
     } finally {
       setSaving(false);
     }
@@ -275,7 +256,6 @@ function EmailSettings() {
   const sendTest = async () => {
     if (!testTo) return;
     setTesting(true);
-    setTestStatus(null);
     try {
       const res = await fetch(`${API_BASE}/settings/test-email`, {
         method: 'POST',
@@ -283,9 +263,10 @@ function EmailSettings() {
         body: JSON.stringify({ to: testTo }),
       });
       const data = await res.json();
-      setTestStatus({ ok: data.ok, msg: data.message });
+      if (data.ok) toast.success(data.message);
+      else toast.error(data.message);
     } catch (e) {
-      setTestStatus({ ok: false, msg: e.message });
+      toast.error(e.message);
     } finally {
       setTesting(false);
     }
@@ -365,10 +346,7 @@ function EmailSettings() {
         </div>
       </SettingsSubsection>
 
-      <div className="space-y-3">
-        <SaveButton onClick={save} saving={saving} />
-        <StatusAlert status={status} />
-      </div>
+      <SaveButton onClick={save} saving={saving} />
 
       <Separator />
 
@@ -379,7 +357,6 @@ function EmailSettings() {
             <Send className="w-4 h-4 mr-1.5" />{testing ? 'Sending…' : 'Send Test'}
           </Button>
         </div>
-        <StatusAlert status={testStatus} />
       </SettingsSubsection>
     </SettingsSectionCard>
   );
@@ -399,8 +376,6 @@ function WhatsAppSettings() {
     notify_wa_cancelled: JSON.stringify({ ...DEFAULT_WA_NOTIFY, recipients: 'both' }),
   });
   const [testTo, setTestTo] = useState('');
-  const [status, setStatus] = useState(null);
-  const [testStatus, setTestStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -414,7 +389,6 @@ function WhatsAppSettings() {
 
   const save = async () => {
     setSaving(true);
-    setStatus(null);
     try {
       const res = await fetch(`${API_BASE}/settings`, {
         method: 'PATCH',
@@ -422,9 +396,9 @@ function WhatsAppSettings() {
         body: JSON.stringify(cfg),
       });
       if (!res.ok) throw new Error((await res.json()).message);
-      setStatus({ ok: true, msg: 'Settings saved.' });
+      toast.success('Settings saved.');
     } catch (e) {
-      setStatus({ ok: false, msg: e.message });
+      toast.error(e.message);
     } finally {
       setSaving(false);
     }
@@ -433,7 +407,6 @@ function WhatsAppSettings() {
   const sendTest = async () => {
     if (!testTo) return;
     setTesting(true);
-    setTestStatus(null);
     try {
       const res = await fetch(`${API_BASE}/settings/test-whatsapp`, {
         method: 'POST',
@@ -441,9 +414,10 @@ function WhatsAppSettings() {
         body: JSON.stringify({ to: testTo }),
       });
       const data = await res.json();
-      setTestStatus({ ok: data.ok, msg: data.message });
+      if (data.ok) toast.success(data.message);
+      else toast.error(data.message);
     } catch (e) {
-      setTestStatus({ ok: false, msg: e.message });
+      toast.error(e.message);
     } finally {
       setTesting(false);
     }
@@ -510,10 +484,7 @@ function WhatsAppSettings() {
         </div>
       </SettingsSubsection>
 
-      <div className="space-y-3">
-        <SaveButton onClick={save} saving={saving} />
-        <StatusAlert status={status} />
-      </div>
+      <SaveButton onClick={save} saving={saving} />
 
       <Separator />
 
@@ -524,7 +495,6 @@ function WhatsAppSettings() {
             <Send className="w-4 h-4 mr-1.5" />{testing ? 'Sending…' : 'Send Test'}
           </Button>
         </div>
-        <StatusAlert status={testStatus} />
       </SettingsSubsection>
     </SettingsSectionCard>
   );
@@ -669,7 +639,6 @@ function NexusSsoSettings() {
     default_role_id: null,
   });
   const [roles, setRoles] = useState([]);
-  const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -700,7 +669,6 @@ function NexusSsoSettings() {
 
   const save = async () => {
     setSaving(true);
-    setStatus(null);
     try {
       const payload = {
         nexus_sso: {
@@ -719,9 +687,9 @@ function NexusSsoSettings() {
       });
       if (!res.ok) throw new Error((await res.json()).message);
       if (cfg.secret) setCfg(c => ({ ...c, secret: '', secret_set: true }));
-      setStatus({ ok: true, msg: 'Nexus SSO settings saved.' });
+      toast.success('Nexus SSO settings saved.');
     } catch (e) {
-      setStatus({ ok: false, msg: e.message });
+      toast.error(e.message);
     } finally {
       setSaving(false);
     }
@@ -829,17 +797,13 @@ function NexusSsoSettings() {
         </div>
       </div>
 
-      <div className="space-y-3">
-        <SaveButton onClick={save} saving={saving} label="Save SSO Settings" />
-        <StatusAlert status={status} />
-      </div>
+      <SaveButton onClick={save} saving={saving} label="Save SSO Settings" />
     </SettingsSectionCard>
   );
 }
 
 function WebhookSettings() {
   const [webhooks, setWebhooks] = useState([]);
-  const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testingId, setTestingId] = useState(null);
@@ -857,7 +821,6 @@ function WebhookSettings() {
 
   const save = async () => {
     setSaving(true);
-    setStatus(null);
     try {
       const res = await fetch(`${API_BASE}/settings`, {
         method: 'PATCH',
@@ -865,9 +828,9 @@ function WebhookSettings() {
         body: JSON.stringify({ webhooks }),
       });
       if (!res.ok) throw new Error((await res.json()).message);
-      setStatus({ ok: true, msg: 'Webhooks saved.' });
+      toast.success('Webhooks saved.');
     } catch (e) {
-      setStatus({ ok: false, msg: e.message });
+      toast.error(e.message);
     } finally {
       setSaving(false);
     }
@@ -936,11 +899,296 @@ function WebhookSettings() {
         Add Webhook
       </Button>
 
-      <div className="space-y-3">
-        <SaveButton onClick={save} saving={saving} label="Save Webhooks" />
-        <StatusAlert status={status} />
-      </div>
+      <SaveButton onClick={save} saving={saving} label="Save Webhooks" />
     </SettingsSectionCard>
+  );
+}
+
+const CLEAR_CATEGORY_META = {
+  bookings:      { label: 'Bookings', description: 'All reservations and booking history' },
+  transactions:  { label: 'Transactions', description: 'Credit top-ups, charges, and ledger entries' },
+  resources:     { label: 'Resources', description: 'All bookable resources and their settings' },
+  rooms:         { label: 'Rooms', description: 'All room listings' },
+  notifications: { label: 'Notifications', description: 'In-app notification history for all users' },
+  roles:         { label: 'Custom roles', description: 'Custom roles and permissions (built-in user/admin roles are kept)' },
+  users:         { label: 'Non-admin users', description: 'Remove all users except administrators (you stay signed in)' },
+  user_credits:  { label: 'Credit balances', description: 'Reset all user credit balances to zero' },
+  uploads:       { label: 'Uploaded images', description: 'Delete files uploaded for resources and rooms' },
+};
+
+const ACTION_LABELS = {
+  create: 'Created',
+  update: 'Updated',
+  delete: 'Deleted',
+  bulk_create: 'Bulk created',
+  clear_data: 'Cleared data',
+  invite: 'Invited',
+  approve: 'Approved',
+  reject: 'Rejected',
+  register: 'Registered',
+  password_change: 'Password changed',
+  password_reset: 'Password reset',
+  upload: 'Uploaded',
+  sso_login: 'SSO sign-in',
+  sso_register: 'SSO user created',
+};
+
+function formatAuditTime(value) {
+  if (!value) return '—';
+  return new Date(value).toLocaleString();
+}
+
+function AuditLogViewer({ refreshKey = 0 }) {
+  const [logs, setLogs] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  const loadLogs = () => {
+    setLoading(true);
+    fetch(`${API_BASE}/audit-logs?limit=50`, { headers: { Authorization: `Bearer ${getToken()}` } })
+      .then(r => r.json())
+      .then(data => {
+        setLogs(Array.isArray(data.logs) ? data.logs : []);
+        setTotal(data.total || 0);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  };
+
+  useEffect(() => { loadLogs(); }, [refreshKey]);
+
+  if (loading) return <SettingsSectionSkeleton />;
+
+  return (
+    <SettingsSectionCard
+      icon={ScrollText}
+      iconColor="info"
+      title="Audit Log"
+      description="Immutable record of data changes and admin actions. Audit logs are never removed by Clear Data."
+    >
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm text-muted-foreground">
+          Showing latest {logs.length.toLocaleString()} of {total.toLocaleString()} entries
+        </p>
+        <Button type="button" variant="outline" size="sm" onClick={loadLogs} className="shrink-0 gap-1.5">
+          <RefreshCw className="w-4 h-4" />
+          Refresh
+        </Button>
+      </div>
+
+      {logs.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-border bg-muted/20 py-10 text-center">
+          <ScrollText className="w-8 h-8 text-muted-foreground/40 mx-auto mb-2" />
+          <p className="text-sm font-medium">No audit entries yet</p>
+          <p className="text-sm text-muted-foreground mt-1">Data changes will appear here automatically.</p>
+        </div>
+      ) : (
+        <div className="space-y-2 max-h-[32rem] overflow-y-auto pr-1">
+          {logs.map(log => (
+            <div key={log.id} className="rounded-xl border border-border bg-muted/20 p-3.5 sm:p-4 space-y-1.5">
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1.5">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium leading-snug">{log.summary || `${log.action} ${log.entity_type}`}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {ACTION_LABELS[log.action] || log.action}
+                    {' · '}
+                    {log.entity_type}
+                    {log.entity_id ? ` · ${log.entity_id}` : ''}
+                  </p>
+                </div>
+                <span className="text-xs text-muted-foreground shrink-0">{formatAuditTime(log.created_at)}</span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                By {log.actor_email || 'system'}
+                {log.ip_address ? ` · ${log.ip_address}` : ''}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+    </SettingsSectionCard>
+  );
+}
+
+function DataManagementSettings() {
+  const [counts, setCounts] = useState({});
+  const [selected, setSelected] = useState({});
+  const [confirmText, setConfirmText] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [clearing, setClearing] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [auditRefreshKey, setAuditRefreshKey] = useState(0);
+
+  const loadSummary = () => {
+    setLoading(true);
+    fetch(`${API_BASE}/settings/data-summary`, { headers: { Authorization: `Bearer ${getToken()}` } })
+      .then(r => r.json())
+      .then(data => {
+        setCounts(data.counts || {});
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  };
+
+  useEffect(() => { loadSummary(); }, []);
+
+  const categoryKeys = Object.keys(CLEAR_CATEGORY_META);
+  const selectedKeys = categoryKeys.filter(k => selected[k]);
+  const allSelected = categoryKeys.length > 0 && selectedKeys.length === categoryKeys.length;
+  const canClear = selectedKeys.length > 0 && confirmText === 'CLEAR';
+
+  const toggleAll = (checked) => {
+    const next = {};
+    categoryKeys.forEach(k => { next[k] = checked; });
+    setSelected(next);
+  };
+
+  const toggleCategory = (key, checked) => {
+    setSelected(prev => ({ ...prev, [key]: checked }));
+  };
+
+  const clearData = async () => {
+    setClearing(true);
+    try {
+      const res = await fetch(`${API_BASE}/settings/clear-data`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+        body: JSON.stringify({ categories: selectedKeys, confirm: confirmText }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message);
+      toast.success('Selected data cleared successfully.');
+      setConfirmText('');
+      setSelected({});
+      setConfirmOpen(false);
+      loadSummary();
+      setAuditRefreshKey(k => k + 1);
+    } catch (e) {
+      toast.error(e.message);
+    } finally {
+      setClearing(false);
+    }
+  };
+
+  if (loading) return <SettingsSectionSkeleton />;
+
+  return (
+    <>
+      <SettingsSectionCard
+        icon={Database}
+        iconColor="warning"
+        title="Clear Data"
+        description="Permanently remove selected data to start fresh. Settings and admin accounts are not affected unless you choose those categories."
+      >
+        <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-3.5 sm:p-4">
+          <p className="text-sm text-destructive font-medium">This action cannot be undone.</p>
+          <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+            Choose what to remove, type <span className="font-mono font-semibold">CLEAR</span> below, then confirm.
+          </p>
+        </div>
+
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-muted/20 px-3.5 py-3">
+          <div className="flex items-center gap-2.5">
+            <Checkbox
+              id="clear-select-all"
+              checked={allSelected}
+              onCheckedChange={v => toggleAll(!!v)}
+            />
+            <Label htmlFor="clear-select-all" className="text-sm font-medium cursor-pointer">
+              Select all
+            </Label>
+          </div>
+          <span className="text-xs text-muted-foreground">
+            {selectedKeys.length} of {categoryKeys.length} selected
+          </span>
+        </div>
+
+        <div className="space-y-2">
+          {categoryKeys.map(key => {
+            const meta = CLEAR_CATEGORY_META[key];
+            const count = counts[key] ?? 0;
+            return (
+              <div
+                key={key}
+                className="flex items-start gap-3 rounded-xl border border-border bg-muted/20 p-3.5 sm:p-4"
+              >
+                <Checkbox
+                  id={`clear-${key}`}
+                  checked={!!selected[key]}
+                  onCheckedChange={v => toggleCategory(key, !!v)}
+                  className="mt-0.5"
+                />
+                <div className="min-w-0 flex-1 space-y-0.5">
+                  <Label htmlFor={`clear-${key}`} className="text-sm font-medium cursor-pointer leading-snug">
+                    {meta.label}
+                  </Label>
+                  <p className="text-xs text-muted-foreground leading-relaxed">{meta.description}</p>
+                </div>
+                <span className="text-xs font-medium text-muted-foreground tabular-nums shrink-0 pt-0.5">
+                  {count.toLocaleString()}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="space-y-1.5">
+          <Label className="text-sm font-medium">Type CLEAR to confirm</Label>
+          <Input
+            value={confirmText}
+            onChange={e => setConfirmText(e.target.value)}
+            placeholder="CLEAR"
+            className="font-mono"
+            autoComplete="off"
+          />
+        </div>
+
+        <Button
+          variant="destructive"
+          disabled={!canClear}
+          onClick={() => setConfirmOpen(true)}
+          className="w-full md:w-auto"
+        >
+          <Trash2 className="w-4 h-4 mr-1.5" />
+          Clear Selected Data
+        </Button>
+      </SettingsSectionCard>
+
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear selected data?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm text-muted-foreground">
+                <p>The following will be permanently deleted:</p>
+                <ul className="list-disc pl-5 space-y-1">
+                  {selectedKeys.map(key => (
+                    <li key={key}>
+                      {CLEAR_CATEGORY_META[key].label}
+                      {' '}
+                      ({(counts[key] ?? 0).toLocaleString()} records)
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={clearing}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={clearData}
+              disabled={clearing}
+            >
+              {clearing && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Clear Data
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AuditLogViewer refreshKey={auditRefreshKey} />
+    </>
   );
 }
 
@@ -954,7 +1202,7 @@ export default function Settings() {
       <PageHeader
         icon={SettingsIcon}
         title="Settings"
-        description="Email, WhatsApp, SSO, and webhook integrations"
+        description="Email, WhatsApp, SSO, webhooks, and data management"
       />
 
       {!isAdmin ? (
@@ -965,7 +1213,7 @@ export default function Settings() {
         />
       ) : (
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="h-auto w-full grid grid-cols-2 sm:grid-cols-4 gap-1 p-1 lg:inline-flex lg:h-10 lg:w-auto">
+          <TabsList className="h-auto w-full grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-1 p-1 lg:inline-flex lg:h-10 lg:w-auto">
             <TabsTrigger
               value="email"
               className="gap-1 sm:gap-1.5 text-xs sm:text-sm py-2.5 lg:py-1.5 flex flex-col sm:flex-row items-center justify-center min-h-[44px] lg:min-h-0"
@@ -994,6 +1242,13 @@ export default function Settings() {
               <Webhook className="w-4 h-4 shrink-0" />
               <span>Webhooks</span>
             </TabsTrigger>
+            <TabsTrigger
+              value="data"
+              className="gap-1 sm:gap-1.5 text-xs sm:text-sm py-2.5 lg:py-1.5 flex flex-col sm:flex-row items-center justify-center min-h-[44px] lg:min-h-0"
+            >
+              <Database className="w-4 h-4 shrink-0" />
+              <span>Data</span>
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="email" className="mt-0 space-y-6">
@@ -1007,6 +1262,9 @@ export default function Settings() {
           </TabsContent>
           <TabsContent value="webhooks" className="mt-0 space-y-6">
             <WebhookSettings />
+          </TabsContent>
+          <TabsContent value="data" className="mt-0 space-y-6">
+            <DataManagementSettings />
           </TabsContent>
         </Tabs>
       )}

@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { toast } from 'sonner';
 import { setToken } from '@/api/base44Client';
 import { readRedirectTo, applySsoRedirect } from '@/lib/ssoRedirect';
-import { setReturnTo } from '@/lib/nexusBrain';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { setReturnTo, markSsoLogin } from '@/lib/nexusBrain';
 import { Loader2, AlertCircle } from 'lucide-react';
 import AppLogo from '@/components/layout/AppLogo';
 
@@ -20,7 +20,9 @@ export default function SsoNexus() {
 
     const token = searchParams.get('token');
     if (!token) {
-      setError('Missing SSO token. Please launch this app from EMZI Nexus Brain.');
+      const message = 'Missing SSO token. Please launch this app from EMZI Nexus Brain.';
+      setError(message);
+      toast.error(message);
       return;
     }
 
@@ -38,12 +40,14 @@ export default function SsoNexus() {
         if (!res.ok) throw new Error(data.message || 'SSO verification failed');
 
         if (data.return_to) setReturnTo(data.return_to);
+        markSsoLogin();
 
         setToken(data.token);
 
         window.location.replace(applySsoRedirect(data.redirect_to, '/'));
       } catch (err) {
         setError(err.message);
+        toast.error(err.message);
         started.current = false;
       }
     })();
@@ -57,10 +61,13 @@ export default function SsoNexus() {
         </div>
 
         {error ? (
-          <Alert variant="destructive" className="rounded-xl border border-destructive/30 bg-destructive/5 text-left">
-            <AlertCircle className="w-4 h-4" />
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
+          <div className="space-y-3 text-left">
+            <div className="flex items-center gap-2 text-destructive">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <p className="text-sm font-medium">Sign-in failed</p>
+            </div>
+            <p className="text-sm text-muted-foreground">{error}</p>
+          </div>
         ) : (
           <div className="space-y-3">
             <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />

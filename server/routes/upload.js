@@ -5,6 +5,7 @@ import { existsSync, mkdirSync } from 'fs';
 import { dirname, extname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { requireAuth } from '../middleware/auth.js';
+import { writeAuditLog } from '../audit.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const UPLOAD_DIR = join(__dirname, '../uploads');
@@ -52,6 +53,21 @@ router.post('/', requireAuth, (req, res) => {
     }
 
     const fileUrl = `/api/uploads/${req.file.filename}`;
+
+    writeAuditLog({
+      req,
+      action: 'upload',
+      entityType: 'uploads',
+      entityId: req.file.filename,
+      summary: `Uploaded image: ${req.file.filename}`,
+      metadata: {
+        filename: req.file.filename,
+        file_url: fileUrl,
+        size: req.file.size,
+        mimetype: req.file.mimetype,
+      },
+    }).catch(() => {});
+
     res.status(201).json({ file_url: fileUrl, url: fileUrl });
   });
 });

@@ -7,6 +7,7 @@ import { verifyNexusJwt } from '../nexusJwt.js';
 import { sanitizeSsoRedirect } from '../ssoRedirect.js';
 import { rateLimit } from '../rateLimit.js';
 import { getEffectivePermissions } from '../permissions.js';
+import { writeAuditLog, slimRow, entitySummary } from '../audit.js';
 
 const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -116,6 +117,17 @@ router.post('/nexus/verify', async (req, res) => {
       );
       const [rows] = await pool.query('SELECT * FROM users WHERE id = ?', [user.id]);
       user = rows[0];
+
+      writeAuditLog({
+        req,
+        actorId: user.id,
+        actorEmail: user.email,
+        action: 'sso_login',
+        entityType: 'users',
+        entityId: user.id,
+        summary: `SSO sign-in: ${entitySummary('users', user)}`,
+        metadata: { nexus_sso_id: nexusId },
+      }).catch(() => {});
     } else {
       const { role_id, role } = await resolveDefaultRole(config);
       const id = randomUUID();
@@ -127,6 +139,17 @@ router.post('/nexus/verify', async (req, res) => {
       );
       const [rows] = await pool.query('SELECT * FROM users WHERE id = ?', [id]);
       user = rows[0];
+
+      writeAuditLog({
+        req,
+        actorId: user.id,
+        actorEmail: user.email,
+        action: 'sso_register',
+        entityType: 'users',
+        entityId: user.id,
+        summary: `SSO user created: ${entitySummary('users', user)}`,
+        metadata: { after: slimRow('users', user), nexus_sso_id: nexusId },
+      }).catch(() => {});
     }
 
     const redirectTo = sanitizeSsoRedirect(

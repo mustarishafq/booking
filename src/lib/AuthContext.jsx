@@ -1,6 +1,6 @@
 import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
 import { db, getToken, clearToken } from '@/api/base44Client';
-import { getPostLogoutUrl } from '@/lib/nexusBrain';
+import { getPostLogoutUrl, clearLoginSession } from '@/lib/nexusBrain';
 
 const AuthContext = createContext();
 
@@ -70,13 +70,15 @@ export const AuthProvider = ({ children }) => {
   }, [checkAppState]);
 
   const logout = (shouldRedirect = true) => {
+    const redirectUrl = getPostLogoutUrl();
     clearToken();
+    clearLoginSession();
     setUser(null);
     setIsAuthenticated(false);
     setAuthError(null);
     setAuthChecked(true);
     if (shouldRedirect) {
-      window.location.href = getPostLogoutUrl();
+      window.location.href = redirectUrl;
     }
   };
 

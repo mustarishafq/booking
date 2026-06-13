@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import bcrypt from 'bcryptjs';
 import pool from '../db.js';
 import { requireAdmin } from '../middleware/auth.js';
+import { writeAuditLog, slimRow, entitySummary } from '../audit.js';
 
 const router = Router();
 
@@ -31,11 +32,28 @@ router.patch('/:id', requireAdmin, async (req, res) => {
       const [rows] = await pool.query('SELECT * FROM users WHERE id = ?', [req.params.id]);
       return res.json(safeUser(rows[0] || {}));
     }
+    const [beforeRows] = await pool.query('SELECT * FROM users WHERE id = ?', [req.params.id]);
+    const before = beforeRows[0];
     const sets   = Object.keys(updates).map(k => `\`${k}\` = ?`).join(', ');
     const values = [...Object.values(updates), req.params.id];
     await pool.query(`UPDATE users SET ${sets} WHERE id = ?`, values);
     const [rows] = await pool.query('SELECT * FROM users WHERE id = ?', [req.params.id]);
-    res.json(safeUser(rows[0]));
+    const after = rows[0];
+
+    writeAuditLog({
+      req,
+      action: 'update',
+      entityType: 'users',
+      entityId: req.params.id,
+      summary: `Updated user: ${entitySummary('users', after)}`,
+      metadata: {
+        before: slimRow('users', before),
+        after: slimRow('users', after),
+        changes: Object.keys(updates),
+      },
+    }).catch(() => {});
+
+    res.json(safeUser(after));
   } catch (e) {
     res.status(500).json({ message: e.message });
   }
@@ -59,6 +77,15 @@ router.post('/invite', requireAdmin, async (req, res) => {
       [id, email.toLowerCase(), role, 0, hash, 1],
     );
 
+    writeAuditLog({
+      req,
+      action: 'invite',
+      entityType: 'users',
+      entityId: id,
+      summary: `Invited user: ${email.toLowerCase()}`,
+      metadata: { email: email.toLowerCase(), role },
+    }).catch(() => {});
+
     res.status(201).json({
       email,
       tempPassword,
@@ -74,6 +101,16 @@ router.post('/:id/approve', requireAdmin, async (req, res) => {
   try {
     await pool.query('UPDATE users SET approved = 1 WHERE id = ?', [req.params.id]);
     const [rows] = await pool.query('SELECT * FROM users WHERE id = ?', [req.params.id]);
+
+    writeAuditLog({
+      req,
+      action: 'approve',
+      entityType: 'users',
+      entityId: req.params.id,
+      summary: `Approved user: ${entitySummary('users', rows[0])}`,
+      metadata: { after: slimRow('users', rows[0]) },
+    }).catch(() => {});
+
     res.json(safeUser(rows[0]));
   } catch (e) {
     res.status(500).json({ message: e.message });
@@ -83,7 +120,19 @@ router.post('/:id/approve', requireAdmin, async (req, res) => {
 // POST /api/users/:id/reject — reject (delete) a pending user (admin only)
 router.post('/:id/reject', requireAdmin, async (req, res) => {
   try {
+    const [rows] = await pool.query('SELECT * FROM users WHERE id = ? AND approved = 0', [req.params.id]);
+    const before = rows[0];
     await pool.query('DELETE FROM users WHERE id = ? AND approved = 0', [req.params.id]);
+
+    writeAuditLog({
+      req,
+      action: 'reject',
+      entityType: 'users',
+      entityId: req.params.id,
+      summary: `Rejected pending user: ${entitySummary('users', before)}`,
+      metadata: { before: slimRow('users', before) },
+    }).catch(() => {});
+
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ message: e.message });

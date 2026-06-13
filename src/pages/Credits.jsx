@@ -7,8 +7,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { CreditCard, CheckCircle2, Wallet, Loader2 } from 'lucide-react';
+import { CreditCard, Wallet, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import PageHeader from '@/components/layout/PageHeader';
 
 const CREDIT_PACKAGES = [
@@ -24,7 +24,6 @@ export default function Credits() {
   const [selectedPkg, setSelectedPkg] = useState(null);
   const [customAmount, setCustomAmount] = useState('');
   const [adding, setAdding] = useState(false);
-  const [success, setSuccess] = useState('');
 
   if (user?.user_type === 'internal') return <Navigate to="/" replace />;
 
@@ -32,7 +31,6 @@ export default function Credits() {
 
   const handleAddCredits = async (amountCents) => {
     setAdding(true);
-    setSuccess('');
 
     // In production this would go through Stripe — here we simulate the top-up
     const bonusCents = amountCents >= 25000 ? 1500 : amountCents >= 10000 ? 500 : 0;
@@ -51,7 +49,7 @@ export default function Credits() {
     setUser({ ...user, credit_balance_cents: newBalance });
     queryClient.invalidateQueries({ queryKey: ['transactions'] });
     setAdding(false);
-    setSuccess(`Successfully added RM${(totalAdd / 100).toFixed(2)} to your account!`);
+    toast.success(`Successfully added RM${(totalAdd / 100).toFixed(2)} to your account!`);
     setSelectedPkg(null);
     setCustomAmount('');
   };
@@ -63,13 +61,6 @@ export default function Credits() {
         title="Credits"
         description="Manage your booking credits"
       />
-
-      {success && (
-        <Alert className="rounded-xl border border-success/30 bg-success/5">
-          <CheckCircle2 className="h-4 w-4 text-success" />
-          <AlertDescription className="text-success">{success}</AlertDescription>
-        </Alert>
-      )}
 
       <Card className="rounded-2xl border border-primary/10 bg-gradient-to-br from-primary/5 via-info/5 to-primary/5">
         <CardContent className="pt-6">

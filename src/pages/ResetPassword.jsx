@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { toast } from 'sonner';
 import ThemeToggle from '@/components/layout/ThemeToggle';
 import AppLogo from '@/components/layout/AppLogo';
 import { APP_NAME } from '@/lib/appConfig';
@@ -19,15 +19,13 @@ export default function ResetPassword() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
   const [done, setDone] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (password.length < 8) { setError('Password must be at least 8 characters.'); return; }
-    if (password !== confirm) { setError('Passwords do not match.'); return; }
+    if (password.length < 8) { toast.error('Password must be at least 8 characters.'); return; }
+    if (password !== confirm) { toast.error('Passwords do not match.'); return; }
     setLoading(true);
-    setError('');
     try {
       const res = await fetch(`${API_BASE}/auth/reset-password`, {
         method: 'POST',
@@ -38,7 +36,7 @@ export default function ResetPassword() {
       if (!res.ok) throw new Error(data.message || 'Reset failed');
       setDone(true);
     } catch (err) {
-      setError(err.message);
+      toast.error(err.message);
     } finally {
       setLoading(false);
     }
@@ -110,13 +108,6 @@ export default function ResetPassword() {
                     <h2 className="text-3xl lg:text-2xl font-bold text-foreground lg:text-left text-center">Set new password</h2>
                     <p className="text-sm text-muted-foreground mt-1 lg:text-left text-center">Choose a strong password of at least 8 characters.</p>
                   </div>
-
-                  {error && (
-                    <Alert variant="destructive" className="mb-5 rounded-xl border border-destructive/30 bg-destructive/5">
-                      <AlertCircle className="w-4 h-4" />
-                      <AlertDescription>{error}</AlertDescription>
-                    </Alert>
-                  )}
 
                   <form onSubmit={handleSubmit} className="space-y-5">
                     <div className="space-y-1.5">

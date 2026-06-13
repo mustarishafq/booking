@@ -1,6 +1,7 @@
 -- EMZI Nexus Booking MySQL Schema
--- Run this file once against your MySQL database to create all tables.
--- Compatible with MySQL 8.0+
+-- Run via: npm run migrate
+-- Target database comes from DB_NAME in .env (default: booking).
+-- migrate.js creates/selects that database; CREATE DATABASE / USE below are stripped at runtime.
 
 CREATE DATABASE IF NOT EXISTS nexus_booking
   CHARACTER SET utf8mb4
@@ -206,6 +207,28 @@ CREATE TABLE IF NOT EXISTS notifications (
   INDEX idx_notifications_user_email (user_email),
   INDEX idx_notifications_read_at (read_at),
   INDEX idx_notifications_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ------------------------------------------------------------------
+-- Audit logs (immutable record of data changes and admin actions)
+-- ------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS audit_logs (
+  id            CHAR(36)     NOT NULL,
+  actor_id      CHAR(36)     DEFAULT NULL,
+  actor_email   VARCHAR(255) DEFAULT NULL,
+  action        VARCHAR(50)  NOT NULL,
+  entity_type   VARCHAR(50)  NOT NULL,
+  entity_id     VARCHAR(255) DEFAULT NULL,
+  summary       VARCHAR(500) DEFAULT NULL,
+  metadata      JSON,
+  ip_address    VARCHAR(45)  DEFAULT NULL,
+  user_agent    VARCHAR(500) DEFAULT NULL,
+  created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_audit_logs_created_at (created_at),
+  INDEX idx_audit_logs_actor_email (actor_email),
+  INDEX idx_audit_logs_entity_type (entity_type),
+  INDEX idx_audit_logs_action (action)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Default Nexus SSO config (disabled until configured in Settings)

@@ -6,39 +6,63 @@
  * existing tables and data are never dropped or modified.
  *
  * Reads connection settings from environment variables (or .env file).
+ * Target database is DB_NAME (default: booking), matching server/db.js.
  */
 
 import 'dotenv/config';
-import { readFileSync } from 'fs';
-import { resolve, dirname } from 'path';
+import { readFileSync, readdirSync, existsSync } from 'fs';
+import { resolve, dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import mysql from 'mysql2/promise';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+const dbName = (process.env.DB_NAME || 'booking').replace(/`/g, '');
 
 const config = {
   host:     process.env.DB_HOST     || 'localhost',
   port:     parseInt(process.env.DB_PORT || '3306'),
   user:     process.env.DB_USER     || 'root',
   password: process.env.DB_PASSWORD || '',
-  // Connect without selecting a database initially so we can CREATE DATABASE
   multipleStatements: true,
   timezone: '+00:00',
 };
 
 const schemaPath = resolve(__dirname, 'schema.sql');
+const migrationsDir = resolve(__dirname, 'migrations');
+
+function stripSchemaBootstrap(sql) {
+  return sql
+    .replace(/CREATE DATABASE IF NOT EXISTS[\s\S]*?;\s*/i, '')
+    .replace(/USE\s+[`\w]+\s*;\s*/i, '');
+}
 
 async function migrate() {
   let conn;
   try {
-    console.log('⏳ Running database migrations…');
+    console.log(`⏳ Running database migrations (database: ${dbName})…`);
     conn = await mysql.createConnection(config);
 
-    const sql = readFileSync(schemaPath, 'utf8');
+    await conn.query(
+      `CREATE DATABASE IF NOT EXISTS \`${dbName}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
+    );
+    await conn.query(`USE \`${dbName}\``);
 
-    // Execute the whole file at once — multipleStatements:true handles it.
-    // mysql2 returns an array of results for multi-statement queries.
-    await conn.query(sql);
+    const schemaSql = stripSchemaBootstrap(readFileSync(schemaPath, 'utf8'));
+    await conn.query(schemaSql);
+    console.log('  ✓ schema.sql');
+
+    if (existsSync(migrationsDir)) {
+      const files = readdirSync(migrationsDir)
+        .filter(f => f.endsWith('.sql'))
+        .sort();
+
+      for (const file of files) {
+        const migrationSql = readFileSync(join(migrationsDir, file), 'utf8');
+        await conn.query(migrationSql);
+        console.log(`  ✓ migrations/${file}`);
+      }
+    }
 
     console.log('✅ Migrations complete.');
   } catch (err) {

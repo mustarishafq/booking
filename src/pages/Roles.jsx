@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { toast } from 'sonner';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -146,7 +146,6 @@ export default function Roles() {
   const [editingRole, setEditingRole] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -164,14 +163,12 @@ export default function Roles() {
   const openCreate = () => {
     setEditingRole(null);
     setForm(EMPTY_FORM);
-    setError('');
     setDialogOpen(true);
   };
 
   const openEdit = (role) => {
     setEditingRole(role);
     setForm({ name: role.name, description: role.description || '', color: role.color || 'slate', permissions: role.permissions || {} });
-    setError('');
     setDialogOpen(true);
   };
 
@@ -180,9 +177,8 @@ export default function Roles() {
   };
 
   const handleSave = async () => {
-    if (!form.name.trim()) { setError('Role name is required'); return; }
+    if (!form.name.trim()) { toast.error('Role name is required'); return; }
     setSaving(true);
-    setError('');
     try {
       const url = editingRole ? `${API_BASE}/roles/${editingRole.id}` : `${API_BASE}/roles`;
       const method = editingRole ? 'PATCH' : 'POST';
@@ -195,9 +191,10 @@ export default function Roles() {
       if (!res.ok) throw new Error(data.message || 'Save failed');
       queryClient.invalidateQueries({ queryKey: ['roles'] });
       queryClient.invalidateQueries({ queryKey: ['users'] });
+      toast.success(editingRole ? 'Role updated.' : 'Role created.');
       setDialogOpen(false);
     } catch (e) {
-      setError(e.message);
+      toast.error(e.message);
     } finally {
       setSaving(false);
     }
@@ -213,6 +210,7 @@ export default function Roles() {
       });
       queryClient.invalidateQueries({ queryKey: ['roles'] });
       queryClient.invalidateQueries({ queryKey: ['users'] });
+      toast.success('Role deleted.');
     } finally {
       setDeleting(false);
       setDeleteTarget(null);
@@ -326,12 +324,6 @@ export default function Roles() {
             <DialogTitle>{editingRole ? 'Edit Role' : 'Create Role'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-5 pt-1">
-            {error && (
-              <Alert variant="destructive">
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
-
             <div className="space-y-1.5">
               <Label>Role Name</Label>
               <Input placeholder="e.g. Manager, Staff, Guest" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />

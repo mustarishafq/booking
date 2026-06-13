@@ -8,6 +8,7 @@ import { notifyBookingSubmitted, notifyBookingStatusChange } from '../notificati
 import {
   sendBookingWebhook,
 } from '../webhooks.js';
+import { writeAuditLog, slimRow, entitySummary } from '../audit.js';
 
 // Fields that are stored as JSON strings in MySQL
 const JSON_FIELDS = {
@@ -150,7 +151,6 @@ export const createEntityRouter = (table) => {
       const ph    = rowValues.map(() => `(${uniqueKeys.map(() => '?').join(', ')})`).join(', ');
       await pool.query(`INSERT INTO \`${table}\` (${cols}) VALUES ${ph}`, rowValues.flat());
 
-      // Email + WhatsApp + in-app + webhooks on booking submission
       if (table === 'bookings' && records[0]?.booked_by_email) {
         const booking = records[0];
         sendBookingSubmitted(booking).catch(() => {});
@@ -161,6 +161,17 @@ export const createEntityRouter = (table) => {
           sendBookingWebhook('notify_webhook_confirmed', 'booking.confirmed', booking).catch(() => {});
         }
       }
+
+      writeAuditLog({
+        req,
+        action: 'bulk_create',
+        entityType: table,
+        summary: `Bulk created ${records.length} ${table}`,
+        metadata: {
+          count: records.length,
+          sample: records.slice(0, 3).map(r => slimRow(table, r)),
+        },
+      }).catch(() => {});
 
       res.status(201).json({ count: records.length });
     } catch (e) {
@@ -176,11 +187,22 @@ export const createEntityRouter = (table) => {
       const ph   = Object.keys(raw).map(() => '?').join(', ');
       await pool.query(`INSERT INTO \`${table}\` (${cols}) VALUES (${ph})`, Object.values(raw));
       const [rows] = await pool.query(`SELECT * FROM \`${table}\` WHERE id = ?`, [raw.id]);
+      const created = parseRow(table, rows[0]);
+
+      writeAuditLog({
+        req,
+        action: 'create',
+        entityType: table,
+        entityId: raw.id,
+        summary: `Created ${table.slice(0, -1)}: ${entitySummary(table, created)}`,
+        metadata: { after: slimRow(table, created) },
+      }).catch(() => {});
+
       if (table === 'resources') {
         const [enriched] = await enrichResourceRows(rows);
         return res.status(201).json(enriched);
       }
-      res.status(201).json(parseRow(table, rows[0]));
+      res.status(201).json(created);
     } catch (e) {
       res.status(500).json({ message: e.message });
     }
@@ -239,6 +261,19 @@ export const createEntityRouter = (table) => {
         }
       }
 
+      writeAuditLog({
+        req,
+        action: 'update',
+        entityType: table,
+        entityId: req.params.id,
+        summary: `Updated ${table.slice(0, -1)}: ${entitySummary(table, updated)}`,
+        metadata: {
+          before: slimRow(table, parseRow(table, oldRow)),
+          after: slimRow(table, updated),
+          changes: Object.keys(data),
+        },
+      }).catch(() => {});
+
       res.json(updated);
     } catch (e) {
       res.status(500).json({ message: e.message });
@@ -248,7 +283,21 @@ export const createEntityRouter = (table) => {
   // DELETE /:id
   router.delete('/:id', async (req, res) => {
     try {
+      const [rows] = await pool.query(`SELECT * FROM \`${table}\` WHERE id = ?`, [req.params.id]);
+      if (!rows[0]) return res.status(404).json({ message: 'Not found' });
+      const before = parseRow(table, rows[0]);
+
       await pool.query(`DELETE FROM \`${table}\` WHERE id = ?`, [req.params.id]);
+
+      writeAuditLog({
+        req,
+        action: 'delete',
+        entityType: table,
+        entityId: req.params.id,
+        summary: `Deleted ${table.slice(0, -1)}: ${entitySummary(table, before)}`,
+        metadata: { before: slimRow(table, before) },
+      }).catch(() => {});
+
       res.json({ success: true });
     } catch (e) {
       res.status(500).json({ message: e.message });

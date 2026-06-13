@@ -6,6 +6,7 @@ import pool from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import { sendPasswordResetEmail } from '../emailer.js';
 import { getEffectivePermissions } from '../permissions.js';
+import { writeAuditLog, slimRow, entitySummary } from '../audit.js';
 
 const router = Router();
 const JWT_SECRET   = process.env.JWT_SECRET;
@@ -54,6 +55,17 @@ router.post('/register', async (req, res) => {
       [id, email.toLowerCase(), full_name || '', 'user', 0, hash, 0],
     );
 
+    writeAuditLog({
+      req,
+      actorId: id,
+      actorEmail: email.toLowerCase(),
+      action: 'register',
+      entityType: 'users',
+      entityId: id,
+      summary: `Registered user: ${email.toLowerCase()}`,
+      metadata: { email: email.toLowerCase(), full_name: full_name || '' },
+    }).catch(() => {});
+
     res.status(201).json({ pending: true, message: 'Account created. Please wait for an admin to approve your account before signing in.' });
   } catch (e) {
     res.status(500).json({ message: e.message });
@@ -97,11 +109,30 @@ router.patch('/me', requireAuth, async (req, res) => {
       const [rows] = await pool.query('SELECT * FROM users WHERE id = ?', [req.userId]);
       return res.json(safeUser(rows[0]));
     }
+    const [beforeRows] = await pool.query('SELECT * FROM users WHERE id = ?', [req.userId]);
+    const before = beforeRows[0];
     const sets   = Object.keys(updates).map(k => `\`${k}\` = ?`).join(', ');
     const values = [...Object.values(updates), req.userId];
     await pool.query(`UPDATE users SET ${sets} WHERE id = ?`, values);
     const [rows] = await pool.query('SELECT * FROM users WHERE id = ?', [req.userId]);
-    res.json(safeUser(rows[0]));
+    const after = rows[0];
+
+    writeAuditLog({
+      req,
+      action: new_password ? 'password_change' : 'update',
+      entityType: 'users',
+      entityId: req.userId,
+      summary: new_password
+        ? `Changed password for ${entitySummary('users', after)}`
+        : `Updated profile: ${entitySummary('users', after)}`,
+      metadata: {
+        before: slimRow('users', before),
+        after: slimRow('users', after),
+        changes: Object.keys(updates),
+      },
+    }).catch(() => {});
+
+    res.json(safeUser(after));
   } catch (e) {
     res.status(500).json({ message: e.message });
   }
@@ -149,6 +180,17 @@ router.post('/reset-password', async (req, res) => {
       'UPDATE users SET password_hash = ?, reset_token = NULL, reset_token_expires = NULL WHERE id = ?',
       [hash, rows[0].id],
     );
+
+    writeAuditLog({
+      req,
+      actorId: rows[0].id,
+      actorEmail: rows[0].email,
+      action: 'password_reset',
+      entityType: 'users',
+      entityId: rows[0].id,
+      summary: `Password reset for ${rows[0].email}`,
+    }).catch(() => {});
+
     res.json({ ok: true, message: 'Password reset successfully. You can now sign in.' });
   } catch (e) {
     res.status(500).json({ message: e.message });

@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { addWeeks } from 'date-fns';
 import { toast } from 'sonner';
 import {
-  Loader2, AlertCircle, CheckCircle2, Building2, CalendarPlus,
+  Loader2, Building2, CalendarPlus,
 } from 'lucide-react';
 
 import {
@@ -21,7 +21,6 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { calcBookingCost, bookingDurationLabel } from '@/lib/bookingUtils';
 
@@ -48,8 +47,6 @@ export default function BookingModal({
   const queryClient = useQueryClient();
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
 
   const { data: resources = [] } = useQuery({
     queryKey: ['resources'],
@@ -71,8 +68,6 @@ export default function BookingModal({
       start_time: preselectedStartTime || '',
       end_time: preselectedEndTime || '',
     });
-    setError('');
-    setSuccess('');
     setSaving(false);
   }, [open, preselectedResourceId, preselectedStartTime, preselectedEndTime]);
 
@@ -91,22 +86,20 @@ export default function BookingModal({
     );
 
   const handleBook = async () => {
-    setError('');
-    setSuccess('');
     if (!form.resource_id || !form.title || !form.start_time || !form.end_time) {
-      setError('Please fill in all required fields.');
+      toast.error('Please fill in all required fields.');
       return;
     }
     const s = new Date(form.start_time);
     const e = new Date(form.end_time);
-    if (e <= s) { setError('End must be after start.'); return; }
+    if (e <= s) { toast.error('End must be after start.'); return; }
 
     const isAdmin = user?.role === 'admin';
     const isInternal = user?.user_type === 'internal';
     const balance = user?.credit_balance_cents || 0;
 
     if (isAdmin && !isInternal && totalCost > balance) {
-      setError(`Insufficient credits. Need RM${(totalCost / 100).toFixed(2)}, you have RM${(balance / 100).toFixed(2)}.`);
+      toast.error(`Insufficient credits. Need RM${(totalCost / 100).toFixed(2)}, you have RM${(balance / 100).toFixed(2)}.`);
       return;
     }
 
@@ -116,7 +109,7 @@ export default function BookingModal({
       const is = addWeeks(s, i);
       const ie = addWeeks(e, i);
       if (checkConflict(is.toISOString(), ie.toISOString(), form.resource_id)) {
-        setError(`Conflict detected on week ${i + 1}. That slot is already booked.`);
+        toast.error(`Conflict detected on week ${i + 1}. That slot is already booked.`);
         return;
       }
       instances.push({ start: is, end: ie });
@@ -166,12 +159,11 @@ export default function BookingModal({
       const message = needsApproval
         ? 'Request submitted! Awaiting admin approval.'
         : `Booked! ${instances.length} session(s) confirmed.`;
-      setSuccess(message);
       toast.success(message);
 
       setTimeout(() => onOpenChange(false), 900);
     } catch (err) {
-      setError(err.message || 'Failed to create booking.');
+      toast.error(err.message || 'Failed to create booking.');
       setSaving(false);
     }
   };
@@ -196,19 +188,6 @@ export default function BookingModal({
                 <p className="text-xs text-muted-foreground">As an internal user, your bookings are free — no credits will be charged.</p>
               </div>
             </div>
-          )}
-
-          {error && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-          {success && (
-            <Alert className="rounded-xl border border-success/30 bg-success/5">
-              <CheckCircle2 className="h-4 w-4 text-success" />
-              <AlertDescription className="text-success">{success}</AlertDescription>
-            </Alert>
           )}
 
           <div className="space-y-1.5">

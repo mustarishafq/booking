@@ -19,6 +19,7 @@ import settingsRouter from './routes/settings.js';
 import rolesRouter from './routes/roles.js';
 import notificationsRouter from './routes/notifications.js';
 import uploadRouter from './routes/upload.js';
+import auditRouter from './routes/audit.js';
 import { createEntityRouter } from './routes/entities.js';
 
 const app  = express();
@@ -59,6 +60,9 @@ app.use('/api/roles',        rolesRouter);
 
 // In-app notifications
 app.use('/api/notifications', notificationsRouter);
+
+// Audit logs (admin)
+app.use('/api/audit-logs', auditRouter);
 
 // File uploads
 app.use('/api/upload', uploadRouter);
