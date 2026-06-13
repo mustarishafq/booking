@@ -2,7 +2,7 @@
 -- Run this file once against your MySQL database to create all tables.
 -- Compatible with MySQL 8.0+
 
-CREATE DATABASE IF NOT EXISTS booking
+CREATE DATABASE IF NOT EXISTS nexus_booking
   CHARACTER SET utf8mb4
   COLLATE utf8mb4_unicode_ci;
 
