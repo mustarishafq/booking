@@ -21,7 +21,39 @@ const WA_KEYS = [
 
 const WEBHOOK_KEYS = ['webhooks'];
 
-const ALLOWED_KEYS = [...EMAIL_KEYS, ...WA_KEYS, ...WEBHOOK_KEYS];
+const NEXUS_SSO_KEYS = ['nexus_sso'];
+
+const ALLOWED_KEYS = [...EMAIL_KEYS, ...WA_KEYS, ...WEBHOOK_KEYS, ...NEXUS_SSO_KEYS];
+
+const DEFAULT_NEXUS_SSO = {
+  enabled: false,
+  secret: '',
+  issuer: '',
+  default_role: 'user',
+  default_role_id: null,
+};
+
+function parseNexusSso(raw) {
+  if (!raw) return { ...DEFAULT_NEXUS_SSO };
+  try {
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    return { ...DEFAULT_NEXUS_SSO, ...parsed };
+  } catch {
+    return { ...DEFAULT_NEXUS_SSO };
+  }
+}
+
+function nexusSsoForApi(raw) {
+  const cfg = parseNexusSso(raw);
+  return {
+    enabled: !!cfg.enabled,
+    issuer: cfg.issuer || '',
+    secret: '',
+    secret_set: !!(cfg.secret && cfg.secret.length >= 32),
+    default_role: cfg.default_role || 'user',
+    default_role_id: cfg.default_role_id || null,
+  };
+}
 
 // GET /api/settings — load all settings (admin)
 router.get('/', requireAdmin, async (req, res) => {
@@ -35,6 +67,8 @@ router.get('/', requireAdmin, async (req, res) => {
     result.wa_token_set = !!(result.wa_token);
     result.wa_token = '';
     result.webhooks = parseWebhooksForApi(result.webhooks, result);
+    result.nexus_sso = nexusSsoForApi(result.nexus_sso);
+    delete result.nexus_sso_raw;
     res.json(result);
   } catch (e) {
     res.status(500).json({ message: e.message });
@@ -53,6 +87,29 @@ router.patch('/', requireAdmin, async (req, res) => {
       if ((key === 'smtp_password' || key === 'wa_token') && !updates[key]) continue;
 
       let value = updates[key];
+      if (key === 'nexus_sso') {
+        const incoming = typeof value === 'string' ? JSON.parse(value) : value;
+        const [existingRows] = await pool.query('SELECT `value` FROM settings WHERE `key` = ?', ['nexus_sso']);
+        const existing = parseNexusSso(existingRows[0]?.value);
+
+        const merged = {
+          ...existing,
+          ...incoming,
+          secret: incoming.secret || existing.secret,
+        };
+
+        if (merged.enabled && (!merged.secret || merged.secret.length < 32)) {
+          return res.status(400).json({ message: 'API key must be at least 32 characters when SSO is enabled.' });
+        }
+
+        value = JSON.stringify({
+          enabled: !!merged.enabled,
+          secret: merged.secret || '',
+          issuer: merged.issuer || '',
+          default_role: merged.default_role || 'user',
+          default_role_id: merged.default_role_id || null,
+        });
+      }
       if (key === 'webhooks') {
         const incoming = typeof value === 'string' ? JSON.parse(value) : value;
         if (!Array.isArray(incoming)) {

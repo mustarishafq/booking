@@ -5,7 +5,10 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import ThemeToggle from '@/components/layout/ThemeToggle';
-import { Sparkles, Loader2, CheckCircle2, Eye, EyeOff, Mail, Lock, AlertCircle, CalendarCheck } from 'lucide-react';
+import AppLogo from '@/components/layout/AppLogo';
+import { APP_NAME } from '@/lib/appConfig';
+import { getNexusBrainUrl } from '@/lib/nexusBrain';
+import { Loader2, CheckCircle2, Eye, EyeOff, Mail, Lock, AlertCircle } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
@@ -84,10 +87,10 @@ export default function Login() {
         <div className="absolute top-1/3 right-10 w-48 h-48 rounded-full bg-primary/20 blur-2xl" />
 
         <div className="relative z-10 flex flex-col items-center text-white px-12 max-w-md text-center">
-          <div className="w-16 h-16 rounded-2xl bg-white/10 ring-1 ring-white/10 backdrop-blur flex items-center justify-center mb-6 shadow-lg">
-            <CalendarCheck className="w-8 h-8 text-white" />
+          <div className="mb-6 shadow-lg">
+            <AppLogo size="lg" />
           </div>
-          <h1 className="text-4xl font-bold tracking-tight mb-3">BookHub</h1>
+          <h1 className="text-4xl font-bold tracking-tight mb-3">{APP_NAME}</h1>
           <p className="text-white/60 text-lg leading-relaxed">
             Smart resource booking for modern teams. Manage rooms, equipment, and more — all in one place.
           </p>
@@ -111,11 +114,8 @@ export default function Login() {
         <div className="flex-1 flex items-center justify-center p-6">
           <div className="w-full max-w-md">
           {/* Mobile logo */}
-          <div className="flex lg:hidden items-center justify-center gap-2 mb-8">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-              <Sparkles className="w-4 h-4 text-primary-foreground" />
-            </div>
-            <span className="font-bold text-lg">BookHub</span>
+          <div className="flex lg:hidden items-center justify-center mb-8">
+            <AppLogo size="sm" showText textClassName="text-lg" />
           </div>
 
           <div className="lg:bg-transparent bg-card lg:rounded-none rounded-3xl lg:p-0 p-8 lg:shadow-none shadow-2xl">
@@ -244,6 +244,29 @@ export default function Login() {
                     ) : mode === 'signup' ? 'Create Account' : mode === 'forgot' ? 'Send Reset Link' : 'Sign In'}
                   </Button>
 
+                  {mode === 'signin' && (
+                    <>
+                      <div className="relative my-1">
+                        <div className="absolute inset-0 flex items-center">
+                          <span className="w-full border-t border-border" />
+                        </div>
+                        <div className="relative flex justify-center text-xs uppercase">
+                          <span className="bg-card lg:bg-background px-2 text-muted-foreground">or</span>
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full h-12 lg:h-11 font-medium"
+                        asChild
+                      >
+                        <a href={getNexusBrainUrl()}>
+                          Continue with EMZI Nexus Brain
+                        </a>
+                      </Button>
+                    </>
+                  )}
+
                   {mode === 'forgot' && (
                     <button
                       type="button"
@@ -259,7 +282,7 @@ export default function Login() {
           </div>
 
           <p className="text-xs text-muted-foreground text-center mt-6 lg:hidden">
-            Smart resource booking for modern teams
+            Smart resource booking for modern teams — {APP_NAME}
           </p>
         </div>
         </div>

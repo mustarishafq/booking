@@ -1,6 +1,8 @@
 import nodemailer from 'nodemailer';
 import pool from './db.js';
 
+const APP_NAME = 'EMZI Nexus Booking';
+
 /** Load all settings from DB into a flat map */
 async function loadSettings() {
   const [rows] = await pool.query('SELECT `key`, `value` FROM settings');
@@ -89,9 +91,9 @@ async function sendBookingNotification(triggerKey, subject, html, text, booking)
 export async function sendTestMail(to) {
   return sendMail({
     to,
-    subject: 'BookHub — Test Email',
-    html: '<p>This is a test email from <strong>BookHub</strong>. SMTP is configured correctly.</p>',
-    text: 'This is a test email from BookHub. SMTP is configured correctly.',
+    subject: 'EMZI Nexus Booking — Test Email',
+    html: '<p>This is a test email from <strong>EMZI Nexus Booking</strong>. SMTP is configured correctly.</p>',
+    text: 'This is a test email from EMZI Nexus Booking. SMTP is configured correctly.',
   });
 }
 
@@ -100,7 +102,7 @@ export async function sendTestMail(to) {
 export async function sendBookingSubmitted(booking) {
   return sendBookingNotification(
     'notify_submitted',
-    `BookHub — Booking Submitted: ${booking.title}`,
+    `EMZI Nexus Booking — Booking Submitted: ${booking.title}`,
     `<h2>New Booking Submitted</h2>
      <p><strong>${booking.title}</strong> for <strong>${booking.resource_name}</strong></p>
      <p>Booked by: ${booking.booked_by_name || ''} &lt;${booking.booked_by_email}&gt;</p>
@@ -114,7 +116,7 @@ export async function sendBookingSubmitted(booking) {
 export async function sendBookingRejected(booking) {
   return sendBookingNotification(
     'notify_rejected',
-    `BookHub — Booking Rejected: ${booking.title}`,
+    `EMZI Nexus Booking — Booking Rejected: ${booking.title}`,
     `<h2>Booking Rejected</h2>
      <p><strong>${booking.title}</strong> for <strong>${booking.resource_name}</strong> has been rejected.</p>
      <p>Booked by: ${booking.booked_by_name || ''} &lt;${booking.booked_by_email}&gt;</p>
@@ -127,7 +129,7 @@ export async function sendBookingRejected(booking) {
 export async function sendBookingCancelled(booking) {
   return sendBookingNotification(
     'notify_cancelled',
-    `BookHub — Booking Cancelled: ${booking.title}`,
+    `EMZI Nexus Booking — Booking Cancelled: ${booking.title}`,
     `<h2>Booking Cancelled</h2>
      <p><strong>${booking.title}</strong> for <strong>${booking.resource_name}</strong> has been cancelled.</p>
      <p>Booked by: ${booking.booked_by_name || ''} &lt;${booking.booked_by_email}&gt;</p>`,
@@ -140,14 +142,14 @@ export async function sendBookingCancelled(booking) {
 export async function sendPasswordResetEmail(to, name, resetLink) {
   return sendMail({
     to,
-    subject: 'BookHub — Reset Your Password',
+    subject: 'EMZI Nexus Booking — Reset Your Password',
     html: `<h2>Password Reset Request</h2>
            <p>Hi ${name || 'there'},</p>
-           <p>We received a request to reset your BookHub password. Click the link below to set a new password. This link expires in <strong>1 hour</strong>.</p>
+           <p>We received a request to reset your EMZI Nexus Booking password. Click the link below to set a new password. This link expires in <strong>1 hour</strong>.</p>
            <p><a href="${resetLink}" style="background:#6366f1;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;display:inline-block">Reset Password</a></p>
            <p>Or copy this URL: ${resetLink}</p>
            <p>If you didn't request this, you can safely ignore this email.</p>`,
-    text: `Reset your BookHub password: ${resetLink} (expires in 1 hour). If you didn't request this, ignore this email.`,
+    text: `Reset your EMZI Nexus Booking password: ${resetLink} (expires in 1 hour). If you didn't request this, ignore this email.`,
   });
 }
 

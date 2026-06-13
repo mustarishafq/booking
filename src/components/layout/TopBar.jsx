@@ -1,5 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { Search, Sparkles, CreditCard, Menu, User, LogOut } from 'lucide-react';
+import { Search, CreditCard, Menu, User, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils';
 import { useCompactNav } from '@/hooks/use-mobile';
 import { isMobileUserNav } from '@/lib/navigation';
 import { db } from '@/api/base44Client';
+import AppLogo from './AppLogo';
 
 export default function TopBar({ user, onMenuOpen }) {
   const navigate = useNavigate();
@@ -34,10 +35,7 @@ export default function TopBar({ user, onMenuOpen }) {
     <header className="fixed top-0 left-0 right-0 z-40 h-16 border-b border-border bg-card/80 backdrop-blur-xl">
       <div className="h-full max-w-[1600px] mx-auto px-4 sm:px-6 flex items-center gap-3">
         <Link to="/" className="flex items-center gap-2 shrink-0">
-          <div className="w-8 h-8 rounded-xl bg-primary flex items-center justify-center">
-            <Sparkles className="w-4 h-4 text-primary-foreground" />
-          </div>
-          <span className="font-bold tracking-tight hidden sm:inline">BookHub</span>
+          <AppLogo size="sm" showText textClassName="hidden sm:inline" />
         </Link>
 
         {showMobileMenu && (

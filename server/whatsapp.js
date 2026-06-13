@@ -97,7 +97,7 @@ export async function sendTestWA(phone) {
   const cfg = await loadSettings();
   if (!cfg.wa_phone_id || !cfg.wa_token) return { ok: false, error: 'WhatsApp not configured' };
   try {
-    await sendSingleWA(phone, 'BookHub test message — WhatsApp is configured correctly.', cfg);
+    await sendSingleWA(phone, 'EMZI Nexus Booking test message — WhatsApp is configured correctly.', cfg);
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e.message };

@@ -1,4 +1,4 @@
-# BookHub
+# EMZI Nexus Booking
 
 A resource-booking web application built with **React + Vite** (frontend) and **Express + MySQL** (backend).
 
@@ -148,7 +148,7 @@ Use a process manager such as **PM2** to keep it running:
 
 ```bash
 npm install -g pm2
-pm2 start server/index.js --name bookhub-api
+pm2 start server/index.js --name nexus-booking-api
 pm2 save
 ```
 

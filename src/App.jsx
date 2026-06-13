@@ -10,6 +10,7 @@ import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import AppLayout from '@/components/layout/AppLayout';
 import Login from '@/pages/Login';
 import ResetPassword from '@/pages/ResetPassword';
+import SsoNexus from '@/pages/SsoNexus';
 import Dashboard from '@/pages/Dashboard';
 import Resources from '@/pages/Resources';
 import Bookings from '@/pages/Bookings';
@@ -72,6 +73,7 @@ function App() {
           <Router>
             <Routes>
               <Route path="/login" element={<Login />} />
+              <Route path="/sso/nexus" element={<SsoNexus />} />
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/*" element={<AuthenticatedApp />} />
             </Routes>

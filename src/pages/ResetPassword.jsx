@@ -5,7 +5,9 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import ThemeToggle from '@/components/layout/ThemeToggle';
-import { CalendarCheck, Loader2, CheckCircle2, Eye, EyeOff, Lock, AlertCircle, ShieldCheck, Sparkles } from 'lucide-react';
+import AppLogo from '@/components/layout/AppLogo';
+import { APP_NAME } from '@/lib/appConfig';
+import { Loader2, CheckCircle2, Eye, EyeOff, Lock, AlertCircle, ShieldCheck } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
@@ -49,10 +51,10 @@ export default function ResetPassword() {
         <div className="absolute -bottom-32 -right-20 w-[28rem] h-[28rem] rounded-full bg-primary/10 blur-3xl" />
 
         <div className="relative z-10 flex flex-col items-center text-white px-12 max-w-md text-center">
-          <div className="w-16 h-16 rounded-2xl bg-white/10 ring-1 ring-white/10 backdrop-blur flex items-center justify-center mb-6 shadow-lg">
-            <CalendarCheck className="w-8 h-8 text-white" />
+          <div className="mb-6 shadow-lg">
+            <AppLogo size="lg" />
           </div>
-          <h1 className="text-4xl font-bold tracking-tight mb-3">BookHub</h1>
+          <h1 className="text-4xl font-bold tracking-tight mb-3">{APP_NAME}</h1>
           <p className="text-white/60 text-lg leading-relaxed">
             Smart resource booking for modern teams.
           </p>
@@ -75,11 +77,8 @@ export default function ResetPassword() {
 
         <div className="flex-1 flex items-center justify-center p-6">
           <div className="w-full max-w-md">
-            <div className="flex lg:hidden items-center justify-center gap-2 mb-8">
-              <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-                <Sparkles className="w-4 h-4 text-primary-foreground" />
-              </div>
-              <span className="font-bold text-lg">BookHub</span>
+            <div className="flex lg:hidden items-center justify-center mb-8">
+              <AppLogo size="sm" showText textClassName="text-lg" />
             </div>
 
             <div className="lg:bg-transparent bg-card lg:rounded-none rounded-3xl lg:p-0 p-8 lg:shadow-none shadow-2xl">

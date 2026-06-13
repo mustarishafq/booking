@@ -1,5 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Sparkles, CreditCard } from 'lucide-react';
+import { CreditCard } from 'lucide-react';
+import AppLogo from './AppLogo';
 import { cn } from '@/lib/utils';
 import { hasPermission } from '@/lib/permissions';
 import { getMobileUserSidebarItems, isNavActive } from '@/lib/navigation';
@@ -22,12 +23,8 @@ export default function MobileNavSidebar({ user, open, onOpenChange }) {
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="left" className="w-[min(100vw-2rem,280px)] p-0 flex flex-col">
         <SheetHeader className="px-5 pt-6 pb-4 border-b border-border text-left space-y-3">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-primary flex items-center justify-center">
-              <Sparkles className="w-4 h-4 text-primary-foreground" />
-            </div>
-            <SheetTitle className="text-base font-bold tracking-tight">BookHub</SheetTitle>
-          </div>
+          <SheetTitle className="sr-only">Navigation</SheetTitle>
+          <AppLogo size="sm" showText textClassName="text-base" />
           {user && (
             <div className="space-y-1">
               <p className="text-sm font-medium truncate">{user.full_name || 'User'}</p>

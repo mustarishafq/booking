@@ -13,7 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Shield, CheckCircle2, AlertCircle, Mail, Send, Bell, X,
   MessageCircle, Settings as SettingsIcon, Webhook, Plus, Trash2,
-  Eye, EyeOff, Copy, RefreshCw,
+  Eye, EyeOff, Copy, RefreshCw, KeyRound,
 } from 'lucide-react';
 import PageHeader from '@/components/layout/PageHeader';
 import EmptyState from '@/components/ui/EmptyState';
@@ -335,7 +335,7 @@ function EmailSettings() {
         </div>
         <div className="space-y-1.5 md:col-span-2 lg:col-span-1">
           <Label className="text-sm font-medium">From Address</Label>
-          <Input value={cfg.email_from} onChange={e => setCfg(c => ({ ...c, email_from: e.target.value }))} placeholder="BookHub <noreply@yourdomain.com>" />
+          <Input value={cfg.email_from} onChange={e => setCfg(c => ({ ...c, email_from: e.target.value }))} placeholder="EMZI Nexus Booking <noreply@yourdomain.com>" />
         </div>
         <div className="flex items-center gap-3 md:pt-0 lg:pt-7">
           <Switch
@@ -617,7 +617,7 @@ function WebhookCard({ webhook, index, onChange, onRemove, onTest, testing, test
         </div>
         <div className="space-y-1.5 md:col-span-2">
           <Label className="text-sm font-medium">URL</Label>
-          <Input value={webhook.url} onChange={e => update({ url: e.target.value })} placeholder="https://example.com/webhooks/bookhub" />
+          <Input value={webhook.url} onChange={e => update({ url: e.target.value })} placeholder="https://example.com/webhooks/nexus-booking" />
         </div>
       </div>
 
@@ -653,6 +653,189 @@ function WebhookCard({ webhook, index, onChange, onRemove, onTest, testing, test
         <StatusAlert status={testStatus} className="md:flex-1" />
       </div>
     </div>
+  );
+}
+
+function generateApiKey() {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function NexusSsoSettings() {
+  const [cfg, setCfg] = useState({
+    enabled: false,
+    issuer: '',
+    secret: '',
+    secret_set: false,
+    default_role: 'user',
+    default_role_id: null,
+  });
+  const [roles, setRoles] = useState([]);
+  const [status, setStatus] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [showSecret, setShowSecret] = useState(false);
+
+  const ssoEndpoint = `${window.location.origin}/sso/nexus`;
+
+  useEffect(() => {
+    Promise.all([
+      fetch(`${API_BASE}/settings`, { headers: { Authorization: `Bearer ${getToken()}` } }).then(r => r.json()),
+      fetch(`${API_BASE}/roles`, { headers: { Authorization: `Bearer ${getToken()}` } }).then(r => r.json()),
+    ])
+      .then(([settings, roleList]) => {
+        const sso = settings.nexus_sso || {};
+        setCfg({
+          enabled: !!sso.enabled,
+          issuer: sso.issuer || '',
+          secret: '',
+          secret_set: !!sso.secret_set,
+          default_role: sso.default_role || 'user',
+          default_role_id: sso.default_role_id || null,
+        });
+        setRoles(Array.isArray(roleList) ? roleList : []);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, []);
+
+  const save = async () => {
+    setSaving(true);
+    setStatus(null);
+    try {
+      const payload = {
+        nexus_sso: {
+          enabled: cfg.enabled,
+          issuer: cfg.issuer,
+          default_role: cfg.default_role,
+          default_role_id: cfg.default_role_id,
+        },
+      };
+      if (cfg.secret) payload.nexus_sso.secret = cfg.secret;
+
+      const res = await fetch(`${API_BASE}/settings`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error((await res.json()).message);
+      if (cfg.secret) setCfg(c => ({ ...c, secret: '', secret_set: true }));
+      setStatus({ ok: true, msg: 'Nexus SSO settings saved.' });
+    } catch (e) {
+      setStatus({ ok: false, msg: e.message });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const copyEndpoint = async () => {
+    try {
+      await navigator.clipboard.writeText(ssoEndpoint);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch { /* clipboard unavailable */ }
+  };
+
+  if (loading) return <SettingsSectionSkeleton />;
+
+  return (
+    <SettingsSectionCard
+      icon={KeyRound}
+      iconColor="warning"
+      title="Nexus SSO Integration"
+      description="Accept inbound sign-in from EMZI Nexus Brain via signed JWT"
+    >
+      <SettingsToggleRow
+        checked={cfg.enabled}
+        onCheckedChange={v => setCfg(c => ({ ...c, enabled: v }))}
+        label="Enable Nexus SSO"
+        description="When disabled, token verification returns “SSO is not configured.”"
+      />
+
+      <Separator />
+
+      <div className="space-y-4">
+        <div className="space-y-1.5">
+          <Label className="text-sm font-medium">SSO Endpoint</Label>
+          <p className="text-xs text-muted-foreground">Register this URL in EMZI Nexus Brain as the connected system SSO endpoint.</p>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <Input readOnly value={ssoEndpoint} className="font-mono text-xs" />
+            <Button type="button" variant="outline" onClick={copyEndpoint} className="shrink-0 gap-1.5">
+              {copied ? <CheckCircle2 className="w-4 h-4 text-success" /> : <Copy className="w-4 h-4" />}
+              {copied ? 'Copied' : 'Copy'}
+            </Button>
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label className="text-sm font-medium">API Key (Shared Secret)</Label>
+          <p className="text-xs text-muted-foreground">Min. 32 characters. Must match the API key configured in Nexus Brain for this system.</p>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <div className="relative flex-1 min-w-0">
+              <Input
+                type={showSecret ? 'text' : 'password'}
+                value={cfg.secret}
+                onChange={e => setCfg(c => ({ ...c, secret: e.target.value, secret_set: false }))}
+                placeholder={cfg.secret_set ? '••••••••  (saved — enter new to change)' : 'Paste or generate a shared secret'}
+                className="font-mono text-xs pr-10"
+              />
+              <button
+                type="button"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                onClick={() => setShowSecret(v => !v)}
+                aria-label={showSecret ? 'Hide secret' : 'Show secret'}
+              >
+                {showSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+            <Button type="button" variant="outline" onClick={() => setCfg(c => ({ ...c, secret: generateApiKey(), secret_set: false }))} className="shrink-0 gap-1.5">
+              <RefreshCw className="w-4 h-4" />
+              Generate
+            </Button>
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label className="text-sm font-medium">Expected Issuer URL</Label>
+          <p className="text-xs text-muted-foreground">JWT <code className="bg-muted px-1 py-0.5 rounded text-[11px]">iss</code> claim must match exactly. Leave empty to skip issuer validation.</p>
+          <Input
+            value={cfg.issuer}
+            onChange={e => setCfg(c => ({ ...c, issuer: e.target.value }))}
+            placeholder="https://emzinexus.com"
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label className="text-sm font-medium">Default role for new SSO users</Label>
+          <Select
+            value={cfg.default_role_id || cfg.default_role || 'user'}
+            onValueChange={v => {
+              const role = roles.find(r => r.id === v);
+              if (role) {
+                setCfg(c => ({ ...c, default_role_id: role.id, default_role: 'user' }));
+              } else {
+                setCfg(c => ({ ...c, default_role_id: null, default_role: v }));
+              }
+            }}
+          >
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="user">User (built-in)</SelectItem>
+              <SelectItem value="admin">Admin (built-in)</SelectItem>
+              {roles.map(r => (
+                <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <SaveButton onClick={save} saving={saving} label="Save SSO Settings" />
+        <StatusAlert status={status} />
+      </div>
+    </SettingsSectionCard>
   );
 }
 
@@ -777,7 +960,7 @@ export default function Settings() {
       <PageHeader
         icon={SettingsIcon}
         title="Settings"
-        description="Email, WhatsApp, and webhook integrations"
+        description="Email, WhatsApp, SSO, and webhook integrations"
       />
 
       {!isAdmin ? (
@@ -788,7 +971,7 @@ export default function Settings() {
         />
       ) : (
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="h-auto w-full grid grid-cols-3 gap-1 p-1 lg:inline-flex lg:h-10 lg:w-auto">
+          <TabsList className="h-auto w-full grid grid-cols-2 sm:grid-cols-4 gap-1 p-1 lg:inline-flex lg:h-10 lg:w-auto">
             <TabsTrigger
               value="email"
               className="gap-1 sm:gap-1.5 text-xs sm:text-sm py-2.5 lg:py-1.5 flex flex-col sm:flex-row items-center justify-center min-h-[44px] lg:min-h-0"
@@ -804,6 +987,13 @@ export default function Settings() {
               <span className="max-[360px]:text-[11px]">WhatsApp</span>
             </TabsTrigger>
             <TabsTrigger
+              value="sso"
+              className="gap-1 sm:gap-1.5 text-xs sm:text-sm py-2.5 lg:py-1.5 flex flex-col sm:flex-row items-center justify-center min-h-[44px] lg:min-h-0"
+            >
+              <KeyRound className="w-4 h-4 shrink-0" />
+              <span>SSO</span>
+            </TabsTrigger>
+            <TabsTrigger
               value="webhooks"
               className="gap-1 sm:gap-1.5 text-xs sm:text-sm py-2.5 lg:py-1.5 flex flex-col sm:flex-row items-center justify-center min-h-[44px] lg:min-h-0"
             >
@@ -817,6 +1007,9 @@ export default function Settings() {
           </TabsContent>
           <TabsContent value="whatsapp" className="mt-0 space-y-6">
             <WhatsAppSettings />
+          </TabsContent>
+          <TabsContent value="sso" className="mt-0 space-y-6">
+            <NexusSsoSettings />
           </TabsContent>
           <TabsContent value="webhooks" className="mt-0 space-y-6">
             <WebhookSettings />

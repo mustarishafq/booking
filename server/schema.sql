@@ -1,4 +1,4 @@
--- BookHub MySQL Schema
+-- EMZI Nexus Booking MySQL Schema
 -- Run this file once against your MySQL database to create all tables.
 -- Compatible with MySQL 8.0+
 
@@ -27,6 +27,31 @@ CREATE TABLE IF NOT EXISTS users (
   PRIMARY KEY (id),
   UNIQUE KEY uq_users_email (email)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Nexus SSO user ID (safe to run multiple times)
+SET @col_exists = (
+  SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'nexus_sso_id'
+);
+SET @sql = IF(@col_exists = 0,
+  'ALTER TABLE users ADD COLUMN nexus_sso_id VARCHAR(255) NULL DEFAULT NULL',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @idx_exists = (
+  SELECT COUNT(*) FROM information_schema.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND INDEX_NAME = 'uq_users_nexus_sso_id'
+);
+SET @sql = IF(@idx_exists = 0,
+  'ALTER TABLE users ADD UNIQUE KEY uq_users_nexus_sso_id (nexus_sso_id)',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
 
 -- ------------------------------------------------------------------
 -- Resources
@@ -182,6 +207,12 @@ CREATE TABLE IF NOT EXISTS notifications (
   INDEX idx_notifications_read_at (read_at),
   INDEX idx_notifications_created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Default Nexus SSO config (disabled until configured in Settings)
+INSERT IGNORE INTO settings (`key`, `value`) VALUES (
+  'nexus_sso',
+  '{"enabled":false,"secret":"","issuer":"","default_role":"user","default_role_id":null}'
+);
 
 -- Existing databases: run once if upgrading
 -- ALTER TABLE resources ADD COLUMN requires_approval TINYINT(1) NOT NULL DEFAULT 1 AFTER image_url;

@@ -13,6 +13,7 @@ import { existsSync } from 'fs';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 import cors from 'cors';
 import authRouter from './routes/auth.js';
+import ssoRouter from './routes/sso.js';
 import usersRouter from './routes/users.js';
 import settingsRouter from './routes/settings.js';
 import rolesRouter from './routes/roles.js';
@@ -43,6 +44,9 @@ app.use(express.json());
 
 // Auth
 app.use('/api/auth',         authRouter);
+
+// Nexus SSO
+app.use('/api/sso',          ssoRouter);
 
 // User management (admin)
 app.use('/api/users',        usersRouter);
@@ -84,5 +88,5 @@ if (existsSync(distPath)) {
 }
 
 app.listen(PORT, () => {
-  console.log(`BookHub API running on http://localhost:${PORT}`);
+  console.log(`EMZI Nexus Booking API running on http://localhost:${PORT}`);
 });
