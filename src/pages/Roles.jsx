@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import PageHeader from '@/components/layout/PageHeader';
 import EmptyState from '@/components/ui/EmptyState';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Shield, Plus, Pencil, Trash2, Loader2, Users, Settings,
   BookOpen, LayoutGrid, Receipt, ShieldCheck,
