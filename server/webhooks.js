@@ -155,32 +155,80 @@ function buildActionUrl(booking) {
   return `${FRONTEND_URL}${path}`;
 }
 
-function resolveRecipientSsoIds(meta, context) {
+function resolveRecipients(meta, context) {
   const { bookerSsoId, picSsoId } = context;
   const byKey = { booker: bookerSsoId, pic: picSsoId };
   const seen = new Set();
-  const ids = [];
+  const recipients = [];
 
   for (const key of meta.recipientKeys || []) {
     const id = byKey[key];
     if (id && !seen.has(id)) {
       seen.add(id);
-      ids.push(id);
+      recipients.push({ nexusSsoId: id, recipientKey: key });
     }
   }
 
-  return ids.length ? ids : [null];
+  return recipients.length
+    ? recipients
+    : [{ nexusSsoId: null, recipientKey: meta.recipientKeys?.[0] || 'booker' }];
 }
 
-function buildWebhookPayload(event, wh, booking, meta, nexusSsoId) {
+function buildNotificationContent(event, booking, recipientKey) {
+  const title = booking.title || 'Booking';
+  const resource = booking.resource_name || 'resource';
+  const booker = booking.booked_by_name || booking.booked_by_email || 'Someone';
+  const isPending = booking.status === 'pending';
+
+  switch (event) {
+    case 'booking.submitted':
+      return {
+        title: isPending ? 'New booking awaiting approval' : 'New booking on your resource',
+        body: isPending
+          ? `${booker} submitted "${title}" for ${resource}.`
+          : `${booker} booked "${title}" for ${resource}.`,
+      };
+    case 'booking.confirmed':
+      return {
+        title: 'Booking confirmed',
+        body: `"${title}" at ${resource} has been approved.`,
+      };
+    case 'booking.rejected':
+      return {
+        title: 'Booking rejected',
+        body: `"${title}" at ${resource} was rejected.`,
+      };
+    case 'booking.cancelled':
+      return {
+        title: recipientKey === 'pic' ? `Booking cancelled: ${title}` : 'Booking cancelled',
+        body: `"${title}" at ${resource} was cancelled.`,
+      };
+    case 'webhook.test':
+      return {
+        title: 'Test notification',
+        body: 'This is a test webhook delivery from BookHub.',
+      };
+    default:
+      return {
+        title: 'Booking update',
+        body: `"${title}" at ${resource} was updated.`,
+      };
+  }
+}
+
+function buildWebhookPayload(event, wh, booking, meta, recipient) {
+  const { title, body } = buildNotificationContent(event, booking, recipient.recipientKey);
+
   return {
     event,
     timestamp: new Date().toISOString(),
     webhook_id: wh.id,
     type: meta.type,
     category: meta.category,
+    title,
+    body,
     action_url: buildActionUrl(booking),
-    nexus_sso_id: nexusSsoId,
+    nexus_sso_id: recipient.nexusSsoId,
     booking: {
       id: booking.id,
       title: booking.title,
@@ -197,8 +245,8 @@ function buildWebhookPayload(event, wh, booking, meta, nexusSsoId) {
   };
 }
 
-async function deliverWebhook(wh, event, booking, meta, nexusSsoId) {
-  const payload = buildWebhookPayload(event, wh, booking, meta, nexusSsoId);
+async function deliverWebhook(wh, event, booking, meta, recipient) {
+  const payload = buildWebhookPayload(event, wh, booking, meta, recipient);
 
   const secret = wh.secret || generateWebhookSecret();
   const headers = {
@@ -234,19 +282,19 @@ export async function sendBookingWebhook(triggerKey, event, booking) {
 
     const meta = EVENT_META[event] || { type: 'info', category: 'other', recipientKeys: ['booker'] };
     const context = await resolveBookingContext(booking);
-    const recipientIds = resolveRecipientSsoIds(meta, context);
+    const recipients = resolveRecipients(meta, context);
 
     const webhooks = await loadWebhooks();
     const active = webhooks.filter(w => w.enabled && w.url && w.events[eventKey]);
     if (!active.length) return { ok: false, error: 'No matching webhooks' };
 
     const deliveries = active.flatMap(w =>
-      recipientIds.map(nexusSsoId => ({ w, nexusSsoId })),
+      recipients.map(recipient => ({ w, recipient })),
     );
 
     const results = await Promise.all(
-      deliveries.map(({ w, nexusSsoId }) =>
-        deliverWebhook(w, event, booking, meta, nexusSsoId).catch(e => ({ ok: false, error: e.message, webhookId: w.id })),
+      deliveries.map(({ w, recipient }) =>
+        deliverWebhook(w, event, booking, meta, recipient).catch(e => ({ ok: false, error: e.message, webhookId: w.id })),
       ),
     );
 
@@ -288,7 +336,7 @@ export async function sendTestWebhook(webhookId, webhookOverride) {
       booked_by_name: 'Test User',
     };
     const meta = EVENT_META['webhook.test'];
-    return deliverWebhook(wh, 'webhook.test', testBooking, meta, 'test-nexus-sso-id');
+    return deliverWebhook(wh, 'webhook.test', testBooking, meta, { nexusSsoId: 'test-nexus-sso-id', recipientKey: 'booker' });
   } catch (e) {
     return { ok: false, error: e.message };
   }
