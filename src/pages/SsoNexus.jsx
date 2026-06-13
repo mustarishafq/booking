@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import React, { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { setToken } from '@/api/base44Client';
 import { resolveSsoRedirect } from '@/lib/ssoRedirect';
+import { markAuthViaNexus } from '@/lib/nexusBrain';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, AlertCircle } from 'lucide-react';
 import AppLogo from '@/components/layout/AppLogo';
@@ -10,10 +11,13 @@ const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 export default function SsoNexus() {
   const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
   const [error, setError] = useState('');
+  const started = useRef(false);
 
   useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+
     const token = searchParams.get('token');
     if (!token) {
       setError('Missing SSO token. Please launch this app from EMZI Nexus Brain.');
@@ -33,13 +37,17 @@ export default function SsoNexus() {
         if (!res.ok) throw new Error(data.message || 'SSO verification failed');
 
         setToken(data.token);
+        markAuthViaNexus();
+
         const dest = data.redirect_to || redirectTo || '/';
-        navigate(dest.startsWith('/') ? dest : '/', { replace: true });
+        // Full reload so AuthContext picks up the new token (client navigate leaves stale auth state).
+        window.location.replace(dest.startsWith('/') ? dest : '/');
       } catch (err) {
         setError(err.message);
+        started.current = false;
       }
     })();
-  }, [searchParams, navigate]);
+  }, [searchParams]);
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-background p-6">

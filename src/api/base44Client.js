@@ -1,3 +1,5 @@
+import { getPostLogoutUrl, clearAuthViaNexus } from '@/lib/nexusBrain';
+
 const API_BASE  = import.meta.env.VITE_API_URL || '/api';
 const TOKEN_KEY = 'booking_auth_token';
 
@@ -53,7 +55,11 @@ const createEntityClient = (entityPath) => ({
 const auth = {
   async me()                 { return apiFetch('/auth/me'); },
   async isAuthenticated()    { return !!getToken(); },
-  async logout(redirectUrl)  { clearToken(); window.location.href = redirectUrl || '/login'; },
+  async logout(redirectUrl) {
+    clearToken();
+    clearAuthViaNexus();
+    window.location.href = redirectUrl || getPostLogoutUrl();
+  },
   async redirectToLogin(url) {
     const dest = url ? `/login?redirect=${encodeURIComponent(url)}` : '/login';
     window.location.href = dest;

@@ -1,7 +1,15 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
 import { db, getToken, clearToken } from '@/api/base44Client';
+import { getPostLogoutUrl, clearAuthViaNexus } from '@/lib/nexusBrain';
 
 const AuthContext = createContext();
+
+const PUBLIC_PATHS = ['/login', '/sso/nexus', '/reset-password'];
+
+function isPublicPath() {
+  const path = window.location.pathname;
+  return PUBLIC_PATHS.some(p => path === p || path.startsWith(`${p}/`));
+}
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -11,32 +19,7 @@ export const AuthProvider = ({ children }) => {
   const [authChecked, setAuthChecked] = useState(false);
   const [appPublicSettings] = useState({ id: 'app', public_settings: {} });
 
-  useEffect(() => {
-    checkAppState();
-  }, []);
-
-  const checkAppState = async () => {
-    try {
-      setIsLoadingAuth(true);
-      setAuthError(null);
-
-      if (!getToken()) {
-        setIsAuthenticated(false);
-        setIsLoadingAuth(false);
-        setAuthChecked(true);
-        setAuthError({ type: 'auth_required', message: 'Authentication required' });
-        return;
-      }
-
-      await checkUserAuth();
-    } catch (error) {
-      console.error('Unexpected error:', error);
-      setAuthError({ type: 'unknown', message: error.message || 'An unexpected error occurred' });
-      setIsLoadingAuth(false);
-    }
-  };
-
-  const checkUserAuth = async () => {
+  const checkUserAuth = useCallback(async () => {
     try {
       setIsLoadingAuth(true);
       const currentUser = await db.auth.me();
@@ -47,25 +30,61 @@ export const AuthProvider = ({ children }) => {
       setAuthError(null);
     } catch (error) {
       clearToken();
+      clearAuthViaNexus();
       console.error('User auth check failed:', error);
       setIsLoadingAuth(false);
       setIsAuthenticated(false);
       setAuthChecked(true);
-      setAuthError({ type: 'auth_required', message: 'Authentication required' });
+      if (!isPublicPath()) {
+        setAuthError({ type: 'auth_required', message: 'Authentication required' });
+      } else {
+        setAuthError(null);
+      }
     }
-  };
+  }, []);
+
+  const checkAppState = useCallback(async () => {
+    try {
+      setIsLoadingAuth(true);
+      setAuthError(null);
+
+      if (!getToken()) {
+        setIsAuthenticated(false);
+        setIsLoadingAuth(false);
+        setAuthChecked(true);
+        if (!isPublicPath()) {
+          setAuthError({ type: 'auth_required', message: 'Authentication required' });
+        }
+        return;
+      }
+
+      await checkUserAuth();
+    } catch (error) {
+      console.error('Unexpected error:', error);
+      setAuthError({ type: 'unknown', message: error.message || 'An unexpected error occurred' });
+      setIsLoadingAuth(false);
+    }
+  }, [checkUserAuth]);
+
+  useEffect(() => {
+    checkAppState();
+  }, [checkAppState]);
 
   const logout = (shouldRedirect = true) => {
     clearToken();
+    clearAuthViaNexus();
     setUser(null);
     setIsAuthenticated(false);
+    setAuthError(null);
+    setAuthChecked(true);
     if (shouldRedirect) {
-      window.location.href = '/login';
+      window.location.href = getPostLogoutUrl();
     }
   };
 
   const navigateToLogin = () => {
-    window.location.href = '/login';
+    const redirect = encodeURIComponent(window.location.pathname + window.location.search);
+    window.location.href = `/login?redirect=${redirect}`;
   };
 
   return (
@@ -94,4 +113,3 @@ export const useAuth = () => {
   }
   return context;
 };
-
