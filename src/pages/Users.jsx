@@ -1,6 +1,6 @@
 import { db } from '@/api/base44Client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useOutletContext, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
@@ -200,6 +200,12 @@ export default function Users() {
   const [search, setSearch] = useState('');
   const [tabFilter, setTabFilter] = useState(() => searchParams.get('tab') || 'all');
   const [showAddUser, setShowAddUser] = useState(false);
+
+  useEffect(() => {
+    const q = searchParams.get('search');
+    if (q) setSearch(q);
+  }, [searchParams]);
+
   const [adding, setAdding] = useState(false);
   const [addResult, setAddResult] = useState(null);
   const [copiedPassword, setCopiedPassword] = useState(false);

@@ -1,7 +1,7 @@
-import { Link, useNavigate } from 'react-router-dom';
-import { Search, CreditCard, Menu, User, LogOut, Bell } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { CreditCard, Menu, User, LogOut, Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import GlobalSearch from './GlobalSearch';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
   DropdownMenu,
@@ -24,7 +24,6 @@ function formatBadgeCount(count) {
 }
 
 export default function TopBar({ user, onMenuOpen, embedded = false }) {
-  const navigate = useNavigate();
   const isMobile = useIsMobile();
   const sidebarItems = user ? getSidebarItems(user, { hasPermission }, { isMobile }) : [];
   const showUserMobileMenu = isMobile && isMobileUserNav(user);
@@ -34,12 +33,6 @@ export default function TopBar({ user, onMenuOpen, embedded = false }) {
   const initials = user?.full_name
     ? user.full_name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
     : (user?.email?.[0] || 'U').toUpperCase();
-
-  const handleSearch = (e) => {
-    e.preventDefault();
-    const q = e.target.search?.value?.trim();
-    if (q) navigate(`/resources?search=${encodeURIComponent(q)}`);
-  };
 
   return (
     <header
@@ -61,18 +54,11 @@ export default function TopBar({ user, onMenuOpen, embedded = false }) {
           </button>
         )}
 
-        <form onSubmit={handleSearch} className="relative hidden sm:flex sm:flex-1 sm:max-w-md">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-          <Input
-            name="search"
-            className="pl-9 h-10 bg-muted/50 border-0 text-sm hover:bg-muted/70 focus-visible:ring-1 focus-visible:ring-ring transition-colors"
-            placeholder="Search resources, bookings…"
-          />
-        </form>
+        <div className="flex-1 min-w-0">
+          <GlobalSearch user={user} />
+        </div>
 
-        <div className="flex-1 sm:hidden" />
-
-        <div className="flex items-center gap-1 shrink-0 ml-auto">
+        <div className="flex items-center gap-1 shrink-0">
           {user && user.user_type !== 'internal' && (
             <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-primary/5 rounded-lg border border-primary/10 shrink-0 mr-1">
               <CreditCard className="w-3.5 h-3.5 text-primary" />

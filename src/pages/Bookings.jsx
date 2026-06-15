@@ -1,6 +1,6 @@
 import { db } from '@/api/base44Client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useOutletContext, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
@@ -66,6 +66,11 @@ export default function Bookings() {
   const [viewTab, setViewTab] = useState(() => (
     searchParams.get('status') === 'pending' ? 'all' : 'upcoming'
   ));
+
+  useEffect(() => {
+    const q = searchParams.get('search');
+    if (q) setSearch(q);
+  }, [searchParams]);
 
   const canViewAll = hasPermission(user, 'view_all_bookings');
   const canManage = hasPermission(user, 'manage_bookings');
