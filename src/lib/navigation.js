@@ -39,7 +39,87 @@ export function isMobileUserNav(user) {
   return user?.role === 'user';
 }
 
+export function isAdminNav(user) {
+  return user?.role === 'admin';
+}
+
+/** Admin mobile dock: left → right (Profile is rightmost). */
+const ADMIN_MOBILE_DOCK_PATH_ORDER = ['/', '/resources', '/bookings', '/calendar', '/notifications', '/profile'];
+
+/** Admin tablet/desktop dock: all items, Profile rightmost. */
+const ADMIN_DESKTOP_DOCK_PATH_ORDER = [
+  '/',
+  '/resources',
+  '/bookings',
+  '/calendar',
+  '/notifications',
+  '/users',
+  '/roles',
+  '/settings',
+  '/credits',
+  '/transactions',
+  '/profile',
+];
+
+const ADMIN_DOCK_LABELS = {
+  '/calendar': 'Calendars',
+  '/bookings': 'Booking',
+  '/notifications': 'Notifications',
+};
+
+export const ADMIN_DOCK_PATHS = new Set(ADMIN_MOBILE_DOCK_PATH_ORDER);
+
 export const MOBILE_USER_SIDEBAR_PATHS = new Set(['/resources', '/bookings']);
+
+function getAllNavItems(user, { hasPermission }) {
+  const isAdmin = isAdminNav(user);
+  const visibleAdmin = isAdmin
+    ? adminNavItems
+    : adminNavItems.filter(item => hasPermission(user, item.permission));
+
+  return filterNavItems(
+    [...mainNavItems, ...secondaryNavItems, ...visibleAdmin],
+    user,
+    { hasPermission },
+  );
+}
+
+export function getAdminDockItems(user, { hasPermission }, { isMobile = false } = {}) {
+  const order = isMobile ? ADMIN_MOBILE_DOCK_PATH_ORDER : ADMIN_DESKTOP_DOCK_PATH_ORDER;
+  const byPath = new Map(getAllNavItems(user, { hasPermission }).map(item => [item.path, item]));
+
+  return order
+    .map(path => {
+      const item = byPath.get(path);
+      if (!item) return null;
+      const dockLabel = ADMIN_DOCK_LABELS[path];
+      return dockLabel ? { ...item, dockLabel } : item;
+    })
+    .filter(Boolean);
+}
+
+export function getAdminSidebarItems(user, { hasPermission }) {
+  return getAllNavItems(user, { hasPermission }).filter(item => !ADMIN_DOCK_PATHS.has(item.path));
+}
+
+export function getSidebarItems(user, { hasPermission }, { isMobile = false } = {}) {
+  if (isAdminNav(user)) {
+    if (!isMobile) return [];
+    return getAdminSidebarItems(user, { hasPermission });
+  }
+  if (!isMobile || !isMobileUserNav(user)) return [];
+  return getMobileUserSidebarItems(user, { hasPermission });
+}
+
+const ADMIN_SIDEBAR_PATHS = new Set(adminNavItems.map(item => item.path));
+
+export function getSidebarSections(user, { hasPermission }, { isMobile = false } = {}) {
+  const items = getSidebarItems(user, { hasPermission }, { isMobile });
+  return {
+    main: items.filter(item => !ADMIN_SIDEBAR_PATHS.has(item.path)),
+    admin: items.filter(item => ADMIN_SIDEBAR_PATHS.has(item.path)),
+  };
+}
 
 export function getMobileUserSidebarItems(user, { hasPermission }) {
   return getDockNavItems(user, { hasPermission }).filter(item =>
@@ -54,16 +134,7 @@ export function getMobileUserDockItems(user, { hasPermission }) {
 }
 
 export function getDockNavItems(user, { hasPermission }) {
-  const isAdmin = user?.role === 'admin';
-  const visibleAdmin = isAdmin
-    ? adminNavItems
-    : adminNavItems.filter(item => hasPermission(user, item.permission));
-
-  return filterNavItems(
-    [...mainNavItems, ...secondaryNavItems, ...visibleAdmin],
-    user,
-    { hasPermission },
-  );
+  return getAllNavItems(user, { hasPermission });
 }
 
 export function filterNavItems(items, user, { hasPermission }) {
@@ -98,8 +169,17 @@ function insertCenterAction(items, centerAction) {
   return result;
 }
 
-export function getDockEntries(user, { hasPermission }, { isCompactNav = false } = {}) {
-  const useCompactUserDock = isCompactNav && isMobileUserNav(user);
+export function getDockEntries(user, { hasPermission }, { isCompactNav = false, isMobile = false } = {}) {
+  if (!user) return [];
+
+  if (isAdminNav(user)) {
+    return insertCenterAction(
+      getAdminDockItems(user, { hasPermission }, { isMobile }),
+      getCenterDockAction(user, { hasPermission }),
+    );
+  }
+
+  const useCompactUserDock = isMobile && isMobileUserNav(user);
   let items = useCompactUserDock
     ? getMobileUserDockItems(user, { hasPermission })
     : getDockNavItems(user, { hasPermission });

@@ -43,10 +43,10 @@ const STAT_ICONS = {
 };
 
 const STAT_GRID = {
-  1: 'md:grid-cols-1',
-  2: 'sm:grid-cols-2',
-  3: 'sm:grid-cols-2 md:grid-cols-3',
-  4: 'sm:grid-cols-2 lg:grid-cols-4',
+  1: 'grid-cols-1',
+  2: 'grid-cols-2 sm:grid-cols-2',
+  3: 'grid-cols-2 sm:grid-cols-2 md:grid-cols-3',
+  4: 'grid-cols-2 sm:grid-cols-2 lg:grid-cols-4',
 };
 
 export default function Dashboard() {
@@ -111,7 +111,7 @@ export default function Dashboard() {
     return (
       <div className="space-y-4 sm:space-y-6">
         <Skeleton className="h-14 sm:h-16 w-full max-w-md rounded-lg" />
-        <div className={`grid grid-cols-1 ${STAT_GRID[skeletonCount]} gap-3 sm:gap-4`}>
+        <div className={`grid ${STAT_GRID[skeletonCount]} gap-3 sm:gap-4`}>
           {Array.from({ length: skeletonCount }, (_, i) => (
             <Skeleton key={i} className="h-24 sm:h-28 rounded-2xl" />
           ))}
@@ -137,7 +137,7 @@ export default function Dashboard() {
 
       <DashboardAlerts alerts={alerts} />
 
-      <div className={`grid grid-cols-1 ${gridCols} gap-3 sm:gap-4`}>
+      <div className={`grid ${gridCols} gap-3 sm:gap-4`}>
         {stats.map((stat, index) => (
           <StatCard
             key={stat.key}

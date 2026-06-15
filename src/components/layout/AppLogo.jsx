@@ -3,6 +3,7 @@ import { APP_LOGO_PNG, APP_LOGO_SVG } from '@/lib/appConfig';
 
 export default function AppLogo({ className, size = 'md', showText = false, textClassName }) {
   const sizes = {
+    xs: 'w-9 h-9 rounded-xl',
     sm: 'w-8 h-8',
     md: 'w-10 h-10',
     lg: 'w-16 h-16',

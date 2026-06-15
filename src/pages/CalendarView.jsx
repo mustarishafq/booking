@@ -72,7 +72,7 @@ function CalendarStatPill({ icon: Icon, label, value, color = 'primary' }) {
   };
 
   return (
-    <div className="rounded-2xl border border-border bg-card flex items-center gap-3 px-4 py-3 min-w-0">
+    <div className="rounded-2xl border border-border bg-card flex items-center gap-3 px-4 py-3 min-w-0 w-full">
       <div className={cn('w-9 h-9 rounded-xl flex items-center justify-center shrink-0', colors[color])}>
         <Icon className="w-4 h-4" />
       </div>
@@ -245,6 +245,15 @@ export default function CalendarView() {
     onReject: handleReject,
   };
 
+  const pendingStatVisible = canManage && pendingCount > 0;
+  const visibleStatCount = 2 + (pendingStatVisible ? 1 : 0);
+  const statGridClass =
+    visibleStatCount >= 3
+      ? 'grid-cols-2 md:grid-cols-3'
+      : visibleStatCount === 2
+        ? 'grid-cols-2'
+        : 'grid-cols-1 max-w-xs';
+
   return (
     <div className="space-y-4 sm:space-y-6">
       <PageHeader
@@ -327,22 +336,19 @@ export default function CalendarView() {
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          className={cn(
-            'grid gap-2.5',
-            canManage ? 'grid-cols-2 md:grid-cols-3' : 'grid-cols-2',
-          )}
+          className={cn('grid w-full gap-2.5 sm:gap-3', statGridClass)}
         >
           <CalendarStatPill icon={Clock} label="Today" value={todayBookingCount} color="primary" />
           <CalendarStatPill icon={CalendarDays} label="This month" value={monthBookingCount} color="success" />
-          {canManage && pendingCount > 0 && (
+          {pendingStatVisible && (
             <CalendarStatPill icon={List} label="Pending" value={pendingCount} color="warning" />
           )}
         </motion.div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
+      <div className="grid w-full grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6">
         {viewMode === 'month' ? (
-          <Card className="md:col-span-2 rounded-2xl border border-border overflow-hidden">
+          <Card className="lg:col-span-8 xl:col-span-9 rounded-2xl border border-border overflow-hidden min-w-0">
             <CardContent className="p-3 sm:p-4 md:p-5">
               <div className="flex items-center justify-between gap-2 mb-3 sm:mb-4">
                 <Button
@@ -470,7 +476,7 @@ export default function CalendarView() {
             </CardContent>
           </Card>
         ) : timelineMode === 'week' ? (
-          <div className="md:col-span-2 min-w-0">
+          <div className="lg:col-span-8 xl:col-span-9 min-w-0">
             <CalendarWeekTimeline
               date={timelineDate}
               onDateChange={handleTimelineDateChange}
@@ -482,7 +488,7 @@ export default function CalendarView() {
             />
           </div>
         ) : (
-          <div className="md:col-span-2 min-w-0">
+          <div className="lg:col-span-8 xl:col-span-9 min-w-0">
             <CalendarTimeline
               date={timelineDate}
               onDateChange={handleTimelineDateChange}
@@ -496,9 +502,9 @@ export default function CalendarView() {
           </div>
         )}
 
-        {/* Sidebar detail — tablet & desktop */}
-        <div className="hidden md:block md:col-span-1">
-          <CalendarDayDetail {...detailProps} className="sticky top-20" />
+        {/* Sidebar detail — tablet stacked, desktop beside calendar */}
+        <div className="hidden md:block lg:col-span-4 xl:col-span-3 min-w-0">
+          <CalendarDayDetail {...detailProps} className="lg:sticky lg:top-20 w-full" />
         </div>
       </div>
 

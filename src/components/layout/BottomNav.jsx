@@ -4,12 +4,13 @@ import { hasPermission } from '@/lib/permissions';
 import { getDockEntries, isNavActive } from '@/lib/navigation';
 import { glassDockStyles } from './glassStyles';
 import { useUnreadNotificationCount } from '@/hooks/useNotifications';
-import { useCompactNav } from '@/hooks/use-mobile';
+import { useCompactNav, useIsMobile } from '@/hooks/use-mobile';
 
-const dockItemClass =
-  'flex flex-col items-center justify-end gap-1 px-2 py-1.5 relative shrink-0 min-w-[3.5rem] h-[3.75rem] transition-colors duration-200 hover:text-foreground';
+function formatBadgeCount(count) {
+  return count > 99 ? '99+' : count;
+}
 
-function DockNavItem({ item, pathname, unreadCount }) {
+function DockNavItem({ item, pathname, unreadCount, className }) {
   const Icon = item.icon;
   const active = isNavActive(item, pathname);
   const label = item.dockLabel || item.label;
@@ -21,32 +22,31 @@ function DockNavItem({ item, pathname, unreadCount }) {
       title={item.label}
       aria-label={item.label}
       aria-current={active ? 'page' : undefined}
-      className={dockItemClass}
+      className={cn(
+        className,
+        active ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+      )}
     >
       {active && (
-        <span className="absolute top-1 left-1/2 -translate-x-1/2 h-0.5 w-6 bg-primary rounded-full" aria-hidden />
+        <span
+          className="absolute top-0 left-1/2 h-0.5 w-8 -translate-x-1/2 rounded-full bg-primary"
+          aria-hidden
+        />
       )}
-      <span className="relative flex h-9 w-9 items-center justify-center">
-        <Icon className={cn('h-5 w-5', active ? 'text-primary' : 'text-muted-foreground')} />
+      <span className="relative flex items-center justify-center">
+        <Icon className="h-5 w-5" />
         {showBadge && (
-          <span className="absolute -top-0.5 -right-1 min-w-[15px] h-[15px] px-0.5 rounded-full bg-destructive text-destructive-foreground text-[8px] font-semibold flex items-center justify-center">
-            {unreadCount > 9 ? '9+' : unreadCount}
+          <span className="absolute -right-2 -top-1.5 min-w-[16px] h-4 rounded-full bg-destructive px-1 text-[9px] font-bold leading-4 text-destructive-foreground text-center">
+            {formatBadgeCount(unreadCount)}
           </span>
         )}
       </span>
-      <span
-        className={cn(
-          'text-[10px] font-medium leading-none truncate max-w-[4.75rem]',
-          active ? 'text-primary' : 'text-muted-foreground'
-        )}
-      >
-        {label}
-      </span>
+      <span className="text-[10px] font-medium leading-none">{label}</span>
     </Link>
   );
 }
 
-function CenterDockAction({ item, onAction, active }) {
+function CenterDockAction({ item, onAction, active, className }) {
   const Icon = item.icon;
   const label = item.dockLabel || item.label;
 
@@ -57,10 +57,13 @@ function CenterDockAction({ item, onAction, active }) {
       aria-label={item.label}
       aria-pressed={active}
       onClick={() => onAction?.()}
-      className={dockItemClass}
+      className={cn(className, active ? 'text-primary' : 'text-primary/80 hover:text-primary')}
     >
       {active && (
-        <span className="absolute top-1 left-1/2 -translate-x-1/2 h-0.5 w-6 bg-primary rounded-full" aria-hidden />
+        <span
+          className="absolute top-0 left-1/2 h-0.5 w-8 -translate-x-1/2 rounded-full bg-primary"
+          aria-hidden
+        />
       )}
       <span
         className={cn(
@@ -70,16 +73,9 @@ function CenterDockAction({ item, onAction, active }) {
             : 'border-primary/50 bg-primary/10 text-primary hover:bg-primary/15'
         )}
       >
-        <Icon className="h-[18px] w-[18px]" strokeWidth={2.25} />
+        <Icon className="h-5 w-5" strokeWidth={2.25} />
       </span>
-      <span
-        className={cn(
-          'text-[10px] font-medium leading-none truncate max-w-[4.75rem]',
-          active ? 'text-primary' : 'text-primary/80'
-        )}
-      >
-        {label}
-      </span>
+      <span className="text-[10px] font-medium leading-none">{label}</span>
     </button>
   );
 }
@@ -87,22 +83,29 @@ function CenterDockAction({ item, onAction, active }) {
 export default function BottomNav({ user, onOpenBooking, bookingModalOpen }) {
   const { pathname } = useLocation();
   const isCompactNav = useCompactNav();
-  const useCompactUserDock = isCompactNav && user?.role === 'user';
-  const dockEntries = getDockEntries(user, { hasPermission }, { isCompactNav });
+  const isMobile = useIsMobile();
+  const dockEntries = getDockEntries(user, { hasPermission }, { isCompactNav, isMobile });
   const { data: unread = { count: 0 } } = useUnreadNotificationCount(!!user);
+
+  if (!user || dockEntries.length === 0) return null;
+
+  const dockItemClass = cn(
+    'relative flex flex-col items-center justify-center gap-0.5 transition-colors',
+    isMobile ? 'flex-1 px-1' : 'min-w-[4.5rem] shrink-0 px-2'
+  );
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-50 flex justify-center px-3 sm:px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pointer-events-none"
+      className="fixed bottom-0 left-0 right-0 z-40 flex justify-center px-3 sm:px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pointer-events-none"
       aria-label="Main navigation"
     >
       <div
         className={cn(
           glassDockStyles,
-          'pointer-events-auto flex items-stretch gap-0 overflow-x-auto scrollbar-on-hover',
-          useCompactUserDock
-            ? 'w-full max-w-md justify-between px-1 py-1'
-            : 'w-fit max-w-full px-2 py-1.5'
+          'pointer-events-auto flex h-16 items-stretch px-1',
+          isMobile
+            ? 'w-full max-w-lg justify-between'
+            : 'w-fit max-w-full overflow-x-auto scrollbar-on-hover justify-center'
         )}
       >
         {dockEntries.map(entry =>
@@ -112,6 +115,7 @@ export default function BottomNav({ user, onOpenBooking, bookingModalOpen }) {
               item={entry.item}
               onAction={onOpenBooking}
               active={bookingModalOpen}
+              className={dockItemClass}
             />
           ) : (
             <DockNavItem
@@ -119,6 +123,7 @@ export default function BottomNav({ user, onOpenBooking, bookingModalOpen }) {
               item={entry.item}
               pathname={pathname}
               unreadCount={unread.count}
+              className={dockItemClass}
             />
           )
         )}

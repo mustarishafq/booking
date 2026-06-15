@@ -1,7 +1,6 @@
-import { db } from '@/api/base44Client';
-
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Outlet } from 'react-router-dom';
+import { useAuth } from '@/lib/AuthContext';
 
 import TopBar from './TopBar';
 import BottomNav from './BottomNav';
@@ -9,7 +8,7 @@ import MobileNavSidebar from './MobileNavSidebar';
 import BookingModal from '@/components/bookings/BookingModal';
 
 export default function AppLayout() {
-  const [user, setUser] = useState(null);
+  const { user, setUser } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const [bookingOpen, setBookingOpen] = useState(false);
   const [bookingPreset, setBookingPreset] = useState({
@@ -17,10 +16,6 @@ export default function AppLayout() {
     startTime: '',
     endTime: '',
   });
-
-  useEffect(() => {
-    db.auth.me().then(setUser).catch(() => {});
-  }, []);
 
   const openBookingModal = useCallback((preset = '') => {
     if (typeof preset === 'string') {
@@ -36,8 +31,11 @@ export default function AppLayout() {
   }, []);
 
   return (
-    <div className="min-h-[100dvh] bg-background">
-      <TopBar user={user} onMenuOpen={() => setMenuOpen(true)} />
+    <div className="min-h-[100dvh] bg-background flex flex-col">
+      <div className="sticky top-0 z-30 shrink-0 transition-all duration-200">
+        <TopBar user={user} onMenuOpen={() => setMenuOpen(true)} embedded />
+      </div>
+
       <MobileNavSidebar user={user} open={menuOpen} onOpenChange={setMenuOpen} />
       <BookingModal
         open={bookingOpen}
@@ -49,7 +47,7 @@ export default function AppLayout() {
         setUser={setUser}
       />
 
-      <main className="pt-16 pb-[calc(4.75rem+env(safe-area-inset-bottom))]">
+      <main className="flex-1 pb-[calc(4.75rem+env(safe-area-inset-bottom))]">
         <div className="max-w-[1600px] mx-auto p-4 sm:p-6">
           <Outlet context={{ user, setUser, openBookingModal }} />
         </div>

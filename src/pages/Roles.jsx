@@ -81,7 +81,7 @@ export const PERMISSION_GROUPS = [
     icon: Users,
     permissions: [
       { key: 'view_users', label: 'View User List', desc: 'Access the user management page to see all users' },
-      { key: 'manage_users', label: 'Manage Users', desc: 'Approve, reject, invite and edit users (requires View User List)' },
+      { key: 'manage_users', label: 'Manage Users', desc: 'Approve, reject, add and edit users (requires View User List)' },
     ],
   },
   {

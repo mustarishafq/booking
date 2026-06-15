@@ -14,6 +14,7 @@ const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 export default function Login() {
   const [email, setEmail] = useState('');
+  const [fullName, setFullName] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -21,7 +22,7 @@ export default function Login() {
   const [forgotSent, setForgotSent] = useState(false);
   const [mode, setMode] = useState('signin');
 
-  const switchMode = (m) => { setMode(m); setForgotSent(false); setShowPassword(false); };
+  const switchMode = (m) => { setMode(m); setForgotSent(false); setShowPassword(false); setFullName(''); };
 
   const redirectAfterLogin = () => {
     const redirect = new URLSearchParams(window.location.search).get('redirect');
@@ -46,7 +47,11 @@ export default function Login() {
       const res = await fetch(`${API_BASE}/auth/${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({
+          email,
+          password,
+          ...(mode === 'signup' ? { full_name: fullName.trim() } : {}),
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Request failed');
@@ -153,7 +158,7 @@ export default function Login() {
                     Your account is <strong>pending admin approval</strong>. You'll receive an email once an admin approves it.
                   </p>
                 </div>
-                <Button variant="outline" className="w-full" onClick={() => { setPending(false); switchMode('signin'); setEmail(''); setPassword(''); }}>
+                <Button variant="outline" className="w-full" onClick={() => { setPending(false); switchMode('signin'); setEmail(''); setPassword(''); setFullName(''); }}>
                   Back to Sign In
                 </Button>
               </div>
@@ -175,6 +180,21 @@ export default function Login() {
             ) : (
               <>
                 <form onSubmit={handleSubmit} className="space-y-5">
+                  {mode === 'signup' && (
+                    <div className="space-y-1.5">
+                      <Label htmlFor="full-name" className="text-sm font-medium">Full name</Label>
+                      <Input
+                        id="full-name"
+                        type="text"
+                        placeholder="Jane Doe"
+                        value={fullName}
+                        onChange={e => setFullName(e.target.value)}
+                        className="h-12 lg:h-11 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors placeholder:text-muted-foreground/50"
+                        autoComplete="name"
+                      />
+                    </div>
+                  )}
+
                   <div className="space-y-1.5">
                     <Label htmlFor="email" className="text-sm font-medium">Email address</Label>
                     <div className="relative">

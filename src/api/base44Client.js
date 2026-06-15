@@ -71,6 +71,9 @@ const auth = {
 };
 
 const users = {
+  async createUser(data) {
+    return apiFetch('/users', { method: 'POST', body: JSON.stringify(data) });
+  },
   async inviteUser(email, role) {
     return apiFetch('/users/invite', { method: 'POST', body: JSON.stringify({ email, role }) });
   },
