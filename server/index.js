@@ -20,7 +20,9 @@ import rolesRouter from './routes/roles.js';
 import notificationsRouter from './routes/notifications.js';
 import uploadRouter from './routes/upload.js';
 import auditRouter from './routes/audit.js';
+import resourceCareRouter from './routes/resourceCare.js';
 import { createEntityRouter } from './routes/entities.js';
+import { processCareReminders } from './resourceCare.js';
 
 const app  = express();
 const PORT = parseInt(process.env.PORT || '3001');
@@ -64,6 +66,9 @@ app.use('/api/notifications', notificationsRouter);
 // Audit logs (admin)
 app.use('/api/audit-logs', auditRouter);
 
+// Resource care / upkeep
+app.use('/api/resource-care', resourceCareRouter);
+
 // File uploads
 app.use('/api/upload', uploadRouter);
 app.use('/api/uploads', express.static(join(__dirname, 'uploads')));
@@ -93,4 +98,13 @@ if (existsSync(distPath)) {
 
 app.listen(PORT, () => {
   console.log(`EMZI Nexus Booking API running on http://localhost:${PORT}`);
+
+  processCareReminders().catch(err => {
+    console.error('[resource-care] Initial reminder check failed:', err.message);
+  });
+  setInterval(() => {
+    processCareReminders().catch(err => {
+      console.error('[resource-care] Reminder check failed:', err.message);
+    });
+  }, 60 * 60 * 1000);
 });

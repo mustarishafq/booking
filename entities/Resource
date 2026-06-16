@@ -62,6 +62,10 @@
     "location": {
       "type": "string",
       "description": "Physical location or identifier"
+    },
+    "odometer_km": {
+      "type": "number",
+      "description": "Current odometer reading in km (optional, for vehicles)"
     }
   },
   "required": [

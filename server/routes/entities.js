@@ -6,6 +6,11 @@ import { sendBookingRejected, sendBookingCancelled, sendBookingSubmitted } from 
 import { waBookingSubmitted, waBookingRejected, waBookingCancelled } from '../whatsapp.js';
 import { notifyBookingSubmitted, notifyBookingStatusChange } from '../notifications.js';
 import {
+  applyTemplateToResource,
+  assertResourceBookable,
+  getCareSummariesForResources,
+} from '../resourceCare.js';
+import {
   sendBookingWebhook,
 } from '../webhooks.js';
 import { writeAuditLog, slimRow, entitySummary } from '../audit.js';
@@ -97,6 +102,16 @@ const enrichResourceRows = async (rows) => {
   });
 };
 
+const enrichResourceRowsWithCare = async (rows) => {
+  const enriched = await enrichResourceRows(rows);
+  const ids = enriched.map(r => r.id);
+  const summaries = await getCareSummariesForResources(ids);
+  return enriched.map(r => ({
+    ...r,
+    care_summary: summaries[r.id] || { overdue: 0, due: 0, upcoming: 0, next_due_at: null, next_label: null },
+  }));
+};
+
 export const createEntityRouter = (table) => {
   const router = Router();
   router.use(requireAuth);
@@ -121,7 +136,7 @@ export const createEntityRouter = (table) => {
 
       const [rows] = await pool.query(sql, params);
       if (table === 'resources') {
-        return res.json(await enrichResourceRows(rows));
+        return res.json(await enrichResourceRowsWithCare(rows));
       }
       res.json(rows.map(r => parseRow(table, r)));
     } catch (e) {
@@ -141,6 +156,12 @@ export const createEntityRouter = (table) => {
       const baseKeys  = Object.keys(records[0]);
       const extraKeys = ['id', 'created_at'];
       const uniqueKeys = [...new Set([...extraKeys, ...baseKeys])];
+
+      if (table === 'bookings') {
+        for (const record of records) {
+          await assertResourceBookable(record.resource_id);
+        }
+      }
 
       const rowValues = records.map(r => {
         const data = serializeInput(table, { ...r, id: randomUUID(), created_at: new Date() });
@@ -175,13 +196,20 @@ export const createEntityRouter = (table) => {
 
       res.status(201).json({ count: records.length });
     } catch (e) {
-      res.status(500).json({ message: e.message });
+      const clientError = table === 'bookings' && (
+        e.message?.includes('cannot be booked') || e.message?.includes('Booking blocked')
+      );
+      res.status(clientError ? 400 : 500).json({ message: e.message });
     }
   });
 
   // POST / — create single
   router.post('/', async (req, res) => {
     try {
+      if (table === 'bookings' && req.body.resource_id) {
+        await assertResourceBookable(req.body.resource_id);
+      }
+
       const raw  = serializeInput(table, { ...req.body, id: randomUUID(), created_at: new Date() });
       const cols = Object.keys(raw).map(k => `\`${k}\``).join(', ');
       const ph   = Object.keys(raw).map(() => '?').join(', ');
@@ -199,12 +227,16 @@ export const createEntityRouter = (table) => {
       }).catch(() => {});
 
       if (table === 'resources') {
-        const [enriched] = await enrichResourceRows(rows);
+        const [enriched] = await enrichResourceRowsWithCare(rows);
+        applyTemplateToResource(raw.id, raw.resource_type).catch(() => {});
         return res.status(201).json(enriched);
       }
       res.status(201).json(created);
     } catch (e) {
-      res.status(500).json({ message: e.message });
+      const clientError = table === 'bookings' && (
+        e.message?.includes('cannot be booked') || e.message?.includes('Booking blocked')
+      );
+      res.status(clientError ? 400 : 500).json({ message: e.message });
     }
   });
 
@@ -214,7 +246,7 @@ export const createEntityRouter = (table) => {
       const [rows] = await pool.query(`SELECT * FROM \`${table}\` WHERE id = ?`, [req.params.id]);
       if (!rows[0]) return res.status(404).json({ message: 'Not found' });
       if (table === 'resources') {
-        const [enriched] = await enrichResourceRows(rows);
+        const [enriched] = await enrichResourceRowsWithCare(rows);
         return res.json(enriched);
       }
       res.json(parseRow(table, rows[0]));
@@ -238,7 +270,7 @@ export const createEntityRouter = (table) => {
       let updated = parseRow(table, rows[0]);
 
       if (table === 'resources') {
-        [updated] = await enrichResourceRows(rows);
+        [updated] = await enrichResourceRowsWithCare(rows);
       }
 
       // Fire notifications on booking status changes

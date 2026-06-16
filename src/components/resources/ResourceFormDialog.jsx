@@ -13,6 +13,8 @@ import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { Loader2, Trash2, Upload, ImageIcon, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import ResourceCarePanel from '@/components/resources/ResourceCarePanel';
+import { hasPermission } from '@/lib/permissions';
 
 const PRICING_MODELS = [
   { value: 'hourly', label: 'Hourly (RM/hr)' },
@@ -22,7 +24,7 @@ const PRICING_MODELS = [
 
 const defaultForm = {
   name: '', resource_type: '', description: '', capacity: '',
-  pricing_model: 'hourly', rate: '', location: '', image_url: '', requires_approval: true,
+  pricing_model: 'hourly', rate: '', location: '', odometer_km: '', image_url: '', requires_approval: true,
   pic_user_id: '', amenities: '', status: 'active',
 };
 
@@ -37,6 +39,7 @@ export default function ResourceFormDialog({ open, onClose, resource, user }) {
   const [imagePreview, setImagePreview] = useState('');
 
   const isInternal = user?.user_type === 'internal';
+  const canManageCare = hasPermission(user, 'manage_resources');
 
   const { data: users = [] } = useQuery({
     queryKey: ['users'],
@@ -55,6 +58,7 @@ export default function ResourceFormDialog({ open, onClose, resource, user }) {
       pricing_model: resource.pricing_model || 'hourly',
       rate: resource.rate || '',
       location: resource.location || '',
+      odometer_km: resource.odometer_km ?? '',
       image_url: resource.image_url || '',
       requires_approval: resource.requires_approval !== false,
       pic_user_id: resource.pic_user_id || '',
@@ -129,6 +133,7 @@ export default function ResourceFormDialog({ open, onClose, resource, user }) {
         amenities: form.amenities.split(',').map(a => a.trim()).filter(Boolean),
         image_url: imageUrl,
         pic_user_id: form.pic_user_id || null,
+        odometer_km: form.odometer_km !== '' ? Number(form.odometer_km) : null,
       };
 
       if (isInternal) {
@@ -240,6 +245,11 @@ export default function ResourceFormDialog({ open, onClose, resource, user }) {
             </div>
           </div>
 
+          <div className="space-y-1.5">
+            <Label>Odometer (km) <span className="text-muted-foreground text-xs">(optional — for vehicles)</span></Label>
+            <Input type="number" min="0" step="0.1" value={form.odometer_km} onChange={e => set('odometer_km', e.target.value)} placeholder="Current mileage" />
+          </div>
+
           <div className="space-y-2">
             <Label>Photo</Label>
             {previewSrc ? (
@@ -345,6 +355,10 @@ export default function ResourceFormDialog({ open, onClose, resource, user }) {
               </SelectContent>
             </Select>
           </div>
+
+          {resource && (
+            <ResourceCarePanel resource={resource} canManage={canManageCare} />
+          )}
 
           <div className="flex justify-between gap-2 pt-2">
             {resource && (

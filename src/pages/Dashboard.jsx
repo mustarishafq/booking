@@ -1,4 +1,5 @@
 import { db } from '@/api/base44Client';
+import { resourceCareApi } from '@/api/resourceCare';
 
 import React, { useMemo } from 'react';
 import { Link } from 'react-router-dom';
@@ -58,6 +59,14 @@ export default function Dashboard() {
   const canViewUsers = hasPermission(user, 'view_users');
   const canBook = hasPermission(user, 'book_resources');
 
+  const canManageResources = hasPermission(user, 'manage_resources');
+
+  const { data: careSummary } = useQuery({
+    queryKey: ['resource-care-summary'],
+    queryFn: () => resourceCareApi.summary(),
+    enabled: canManageResources,
+  });
+
   const { data: resources = [] } = useQuery({
     queryKey: ['resources'],
     queryFn: () => db.entities.Resource.list(),
@@ -91,8 +100,8 @@ export default function Dashboard() {
   );
 
   const alerts = useMemo(
-    () => buildDashboardAlerts({ user, bookings, users }),
-    [user, bookings, users],
+    () => buildDashboardAlerts({ user, bookings, users, careSummary }),
+    [user, bookings, users, careSummary],
   );
 
   const quickActions = useMemo(

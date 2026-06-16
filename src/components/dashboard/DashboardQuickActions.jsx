@@ -1,12 +1,12 @@
 import { Link } from 'react-router-dom';
 import {
-  Plus, LayoutGrid, CalendarDays, Clock, Users, Settings,
+  Plus, LayoutGrid, CalendarDays, Clock, Users, Settings, Wrench,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 
-const ICONS = { Plus, LayoutGrid, CalendarDays, Clock, Users, Settings };
+const ICONS = { Plus, LayoutGrid, CalendarDays, Clock, Users, Settings, Wrench };
 
 export default function DashboardQuickActions({ actions }) {
   if (!actions?.length) return null;

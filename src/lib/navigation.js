@@ -1,11 +1,12 @@
 import {
   LayoutDashboard, CalendarDays, Boxes, BookOpen, Plus,
-  Users, CreditCard, Receipt, Settings, Shield, User, Bell,
+  Users, CreditCard, Receipt, Settings, Shield, User, Bell, Wrench,
 } from 'lucide-react';
 
 export const mainNavItems = [
   { label: 'Dashboard', dockLabel: 'Dashboard', icon: LayoutDashboard, path: '/', match: (p) => p === '/' },
   { label: 'Resources', dockLabel: 'Resources', icon: Boxes, path: '/resources', permission: 'view_resources', match: (p) => p.startsWith('/resources') },
+  { label: 'Care', dockLabel: 'Care', icon: Wrench, path: '/care', permission: 'view_resources', match: (p) => p.startsWith('/care') },
   { label: 'Bookings', dockLabel: 'Bookings', icon: BookOpen, path: '/bookings', permission: 'book_resources', match: (p) => p.startsWith('/bookings') },
   { label: 'Calendar', dockLabel: 'Calendar', icon: CalendarDays, path: '/calendar', permission: 'view_calendar', match: (p) => p.startsWith('/calendar') },
 ];
@@ -44,12 +45,13 @@ export function isAdminNav(user) {
 }
 
 /** Admin mobile dock: left → right (Profile is rightmost). */
-const ADMIN_MOBILE_DOCK_PATH_ORDER = ['/', '/resources', '/bookings', '/calendar', '/notifications', '/profile'];
+const ADMIN_MOBILE_DOCK_PATH_ORDER = ['/', '/resources', '/care', '/bookings', '/calendar', '/notifications', '/profile'];
 
 /** Admin tablet/desktop dock: all items, Profile rightmost. */
 const ADMIN_DESKTOP_DOCK_PATH_ORDER = [
   '/',
   '/resources',
+  '/care',
   '/bookings',
   '/calendar',
   '/notifications',

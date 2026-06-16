@@ -13,7 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Shield, CheckCircle2, Mail, Send, Bell, X,
   MessageCircle, Settings as SettingsIcon, Webhook, Plus, Trash2,
-  Eye, EyeOff, Copy, RefreshCw, KeyRound, Database, Loader2, ScrollText,
+  Eye, EyeOff, Copy, RefreshCw, KeyRound, Database, Loader2, ScrollText, Wrench,
 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -25,6 +25,7 @@ import EmptyState from '@/components/ui/EmptyState';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import CareTemplatesSettings from '@/components/settings/CareTemplatesSettings';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
@@ -1213,7 +1214,7 @@ export default function Settings() {
         />
       ) : (
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="h-auto w-full grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-1 p-1 lg:inline-flex lg:h-10 lg:w-auto">
+          <TabsList className="h-auto w-full grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-1 p-1 lg:inline-flex lg:h-10 lg:w-auto">
             <TabsTrigger
               value="email"
               className="gap-1 sm:gap-1.5 text-xs sm:text-sm py-2.5 lg:py-1.5 flex flex-col sm:flex-row items-center justify-center min-h-[44px] lg:min-h-0"
@@ -1243,6 +1244,13 @@ export default function Settings() {
               <span>Webhooks</span>
             </TabsTrigger>
             <TabsTrigger
+              value="care"
+              className="gap-1 sm:gap-1.5 text-xs sm:text-sm py-2.5 lg:py-1.5 flex flex-col sm:flex-row items-center justify-center min-h-[44px] lg:min-h-0"
+            >
+              <Wrench className="w-4 h-4 shrink-0" />
+              <span>Care</span>
+            </TabsTrigger>
+            <TabsTrigger
               value="data"
               className="gap-1 sm:gap-1.5 text-xs sm:text-sm py-2.5 lg:py-1.5 flex flex-col sm:flex-row items-center justify-center min-h-[44px] lg:min-h-0"
             >
@@ -1262,6 +1270,9 @@ export default function Settings() {
           </TabsContent>
           <TabsContent value="webhooks" className="mt-0 space-y-6">
             <WebhookSettings />
+          </TabsContent>
+          <TabsContent value="care" className="mt-0 space-y-6">
+            <CareTemplatesSettings />
           </TabsContent>
           <TabsContent value="data" className="mt-0 space-y-6">
             <DataManagementSettings />

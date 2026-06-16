@@ -254,8 +254,15 @@ export default function CalendarView() {
         ? 'grid-cols-2'
         : 'grid-cols-1 max-w-xs';
 
+  const showMobileBar = isMobile && selectedDay && selectedDayBookings.length > 0 && !detailSheetOpen;
+
   return (
-    <div className="space-y-4 sm:space-y-6">
+    <div
+      className={cn(
+        'space-y-4 sm:space-y-6',
+        showMobileBar && 'pb-[calc(4.25rem+env(safe-area-inset-bottom))]',
+      )}
+    >
       <PageHeader
         icon={CalendarDays}
         title="Calendar"
@@ -521,10 +528,10 @@ export default function CalendarView() {
       </Sheet>
 
       {/* Mobile floating bar when sheet is closed */}
-      {isMobile && selectedDay && selectedDayBookings.length > 0 && !detailSheetOpen && (
-        <div className="fixed inset-x-4 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-40 md:hidden">
+      {showMobileBar && (
+        <div className="fixed inset-x-4 bottom-[calc(6.25rem+env(safe-area-inset-bottom))] z-30 md:hidden pointer-events-none">
           <Button
-            className="w-full h-11 rounded-2xl shadow-lg shadow-primary/20 gap-2"
+            className="w-full h-11 rounded-2xl shadow-lg shadow-primary/20 gap-2 pointer-events-auto"
             onClick={() => setDetailSheetOpen(true)}
           >
             <List className="w-4 h-4" />

@@ -71,9 +71,94 @@ CREATE TABLE IF NOT EXISTS resources (
   pic_user_id         CHAR(36)     DEFAULT NULL,
   status              ENUM('active','maintenance','inactive') NOT NULL DEFAULT 'active',
   location      VARCHAR(255),
+  odometer_km   DECIMAL(12,2) DEFAULT NULL,
   created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ------------------------------------------------------------------
+-- Resource care templates & items (upkeep / compliance)
+-- ------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS resource_type_care_templates (
+  id            CHAR(36)     NOT NULL,
+  resource_type VARCHAR(255) NOT NULL,
+  description   TEXT,
+  created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_care_templates_resource_type (resource_type)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS resource_type_care_template_items (
+  id                  CHAR(36)     NOT NULL,
+  template_id         CHAR(36)     NOT NULL,
+  label               VARCHAR(255) NOT NULL,
+  category            ENUM('compliance','preventive','cleaning','inspection','other') NOT NULL DEFAULT 'preventive',
+  interval_type       ENUM('manual','days','months','booking_hours','booking_count','odometer') NOT NULL DEFAULT 'manual',
+  interval_value      INT          DEFAULT NULL,
+  remind_days_before  INT          NOT NULL DEFAULT 7,
+  block_when_overdue  TINYINT(1)   NOT NULL DEFAULT 0,
+  sort_order          INT          NOT NULL DEFAULT 0,
+  created_at          DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_template_items_template_id (template_id),
+  CONSTRAINT fk_template_items_template
+    FOREIGN KEY (template_id) REFERENCES resource_type_care_templates(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS resource_care_items (
+  id                  CHAR(36)     NOT NULL,
+  resource_id         CHAR(36)     NOT NULL,
+  template_item_id    CHAR(36)     DEFAULT NULL,
+  label               VARCHAR(255) NOT NULL,
+  category            ENUM('compliance','preventive','cleaning','inspection','other') NOT NULL DEFAULT 'preventive',
+  interval_type       ENUM('manual','days','months','booking_hours','booking_count','odometer') NOT NULL DEFAULT 'manual',
+  interval_value      INT          DEFAULT NULL,
+  last_done_at        DATETIME     DEFAULT NULL,
+  next_due_at         DATE         DEFAULT NULL,
+  usage_at_last_done  DECIMAL(12,2) DEFAULT NULL,
+  remind_days_before  INT          NOT NULL DEFAULT 7,
+  block_when_overdue  TINYINT(1)   NOT NULL DEFAULT 0,
+  notes               TEXT,
+  is_active           TINYINT(1)   NOT NULL DEFAULT 1,
+  created_at          DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at          DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_care_items_resource_id (resource_id),
+  INDEX idx_care_items_next_due_at (next_due_at),
+  UNIQUE KEY uq_care_items_resource_template (resource_id, template_item_id),
+  CONSTRAINT fk_care_items_resource
+    FOREIGN KEY (resource_id) REFERENCES resources(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS resource_care_completions (
+  id                   CHAR(36)     NOT NULL,
+  care_item_id         CHAR(36)     NOT NULL,
+  completed_at         DATETIME     NOT NULL,
+  completed_by_user_id CHAR(36)     DEFAULT NULL,
+  usage_reading        DECIMAL(12,2) DEFAULT NULL,
+  notes                TEXT,
+  proof_image_url      TEXT,
+  next_due_at          DATE         DEFAULT NULL,
+  created_at           DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_care_completions_item_id (care_item_id),
+  CONSTRAINT fk_care_completions_item
+    FOREIGN KEY (care_item_id) REFERENCES resource_care_items(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS resource_care_reminders (
+  id            CHAR(36)     NOT NULL,
+  care_item_id  CHAR(36)     NOT NULL,
+  reminder_kind ENUM('upcoming','due','overdue') NOT NULL,
+  due_date      DATE         NOT NULL,
+  user_email    VARCHAR(255) NOT NULL,
+  sent_at       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_care_reminder (care_item_id, reminder_kind, due_date, user_email),
+  CONSTRAINT fk_care_reminders_item
+    FOREIGN KEY (care_item_id) REFERENCES resource_care_items(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ------------------------------------------------------------------

@@ -234,10 +234,38 @@ export function buildDashboardStats({
   return items.slice(0, 4);
 }
 
-export function buildDashboardAlerts({ user, bookings, users }) {
+export function buildDashboardAlerts({ user, bookings, users, careSummary }) {
   const alerts = [];
   const canManageBookings = hasPermission(user, 'manage_bookings');
   const canViewUsers = hasPermission(user, 'view_users');
+  const canManageResources = hasPermission(user, 'manage_resources');
+
+  if (canManageResources && careSummary?.overdue > 0) {
+    alerts.push({
+      key: 'care-overdue',
+      type: 'destructive',
+      message: `${careSummary.overdue} resource care item${careSummary.overdue === 1 ? '' : 's'} overdue${careSummary.blocking_overdue_resources ? ` (${careSummary.blocking_overdue_resources} blocking bookings)` : ''}`,
+      href: '/care?status=overdue',
+    });
+  }
+
+  if (canManageResources && careSummary?.due > 0) {
+    alerts.push({
+      key: 'care-due',
+      type: 'warning',
+      message: `${careSummary.due} resource care item${careSummary.due === 1 ? '' : 's'} due today`,
+      href: '/care?status=due',
+    });
+  }
+
+  if (canManageResources && careSummary?.upcoming > 0 && !careSummary?.overdue && !careSummary?.due) {
+    alerts.push({
+      key: 'care-upcoming',
+      type: 'info',
+      message: `${careSummary.upcoming} resource care item${careSummary.upcoming === 1 ? '' : 's'} due soon`,
+      href: '/care?status=upcoming',
+    });
+  }
 
   if (canManageBookings) {
     const pending = bookings.filter(b => b.status === 'pending');
@@ -281,6 +309,12 @@ export function buildQuickActions(user, { openBookingModal } = {}) {
   }
 
   if (hasPermission(user, 'view_resources')) {
+    actions.push({
+      key: 'care',
+      label: 'Care schedules',
+      icon: 'Wrench',
+      href: '/care',
+    });
     actions.push({
       key: 'resources',
       label: 'Browse Resources',

@@ -16,6 +16,7 @@ import Resources from '@/pages/Resources';
 import Bookings from '@/pages/Bookings';
 import BookResourceRedirect from '@/pages/BookResourceRedirect';
 import CalendarView from '@/pages/CalendarView';
+import CareSchedules from '@/pages/CareSchedules';
 import Credits from '@/pages/Credits';
 import Transactions from '@/pages/Transactions';
 import Users from '@/pages/Users';
@@ -52,6 +53,7 @@ const AuthenticatedApp = () => {
         <Route path="/bookings" element={<Bookings />} />
         <Route path="/book" element={<BookResourceRedirect />} />
         <Route path="/calendar" element={<CalendarView />} />
+        <Route path="/care" element={<CareSchedules />} />
         <Route path="/credits" element={<Credits />} />
         <Route path="/transactions" element={<Transactions />} />
         <Route path="/users" element={<Users />} />

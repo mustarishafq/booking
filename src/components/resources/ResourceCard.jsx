@@ -2,11 +2,40 @@ import React from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Users, MapPin, Tag, Building2, Pencil, ShieldCheck, UserRound } from 'lucide-react';
+import { Users, MapPin, Tag, Building2, Pencil, ShieldCheck, UserRound, Wrench } from 'lucide-react';
 import { resourceStatusBadge } from '@/lib/bookingUtils';
 import { cn } from '@/lib/utils';
 
 const pricingLabel = { hourly: '/hr', daily: '/day', flat: ' flat' };
+
+function CareBadge({ summary, className }) {
+  if (!summary) return null;
+  if (summary.overdue > 0) {
+    return (
+      <Badge className={cn('gap-1 bg-destructive/90 text-destructive-foreground pointer-events-none', className)}>
+        <Wrench className="w-3 h-3" />
+        {summary.overdue} overdue
+      </Badge>
+    );
+  }
+  if (summary.due > 0) {
+    return (
+      <Badge className={cn('gap-1 bg-warning/90 text-warning-foreground pointer-events-none', className)}>
+        <Wrench className="w-3 h-3" />
+        Due now
+      </Badge>
+    );
+  }
+  if (summary.upcoming > 0 && summary.next_due_at) {
+    return (
+      <Badge variant="outline" className={cn('gap-1 pointer-events-none', className)}>
+        <Wrench className="w-3 h-3" />
+        Due {summary.next_due_at}
+      </Badge>
+    );
+  }
+  return null;
+}
 
 function PicDisplay({ resource, className, compact = false }) {
   if (!resource.pic_user_id) return null;
@@ -164,6 +193,7 @@ export default function ResourceCard({ resource, onEdit, onBook, isAdmin, isInte
             </p>
           </div>
           <ResourceMeta resource={resource} isInternal={isInternal} amenityLimit={3} className="flex-1" />
+          <CareBadge summary={resource.care_summary} />
         </div>
       </Card>
     );
@@ -215,7 +245,10 @@ export default function ResourceCard({ resource, onEdit, onBook, isAdmin, isInte
             </div>
 
             <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mt-auto">
-              <ResourceMeta resource={resource} isInternal={isInternal} amenityLimit={4} className="flex-1" />
+              <div className="space-y-2 flex-1 min-w-0">
+                <ResourceMeta resource={resource} isInternal={isInternal} amenityLimit={4} />
+                <CareBadge summary={resource.care_summary} />
+              </div>
               <ResourceActions
                 isActive={isActive}
                 isAdmin={isAdmin}

@@ -1,0 +1,24 @@
+{
+  "name": "ResourceCareItem",
+  "type": "object",
+  "properties": {
+    "resource_id": { "type": "string" },
+    "label": { "type": "string" },
+    "category": {
+      "type": "string",
+      "enum": ["compliance", "preventive", "cleaning", "inspection", "other"]
+    },
+    "interval_type": {
+      "type": "string",
+      "enum": ["manual", "days", "months", "booking_hours", "booking_count", "odometer"]
+    },
+    "interval_value": { "type": "number" },
+    "last_done_at": { "type": "string", "format": "date-time" },
+    "next_due_at": { "type": "string", "format": "date" },
+    "remind_days_before": { "type": "number", "default": 7 },
+    "block_when_overdue": { "type": "boolean", "default": false },
+    "notes": { "type": "string" },
+    "is_active": { "type": "boolean", "default": true }
+  },
+  "required": ["resource_id", "label"]
+}
