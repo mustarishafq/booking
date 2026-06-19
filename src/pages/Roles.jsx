@@ -57,7 +57,7 @@ export const PERMISSION_GROUPS = [
     icon: CalendarDays,
     permissions: [
       { key: 'view_calendar', label: 'View Calendar', desc: 'Access the booking calendar page' },
-      { key: 'view_all_calendar_entries', label: 'View All on Calendar', desc: "See all users' bookings on the calendar, not just own" },
+      { key: 'view_all_calendar_entries', label: 'View All on Calendar', desc: "See other users' booking titles and booker names on the calendar (slots always show as occupied)" },
     ],
   },
   {

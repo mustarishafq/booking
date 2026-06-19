@@ -192,6 +192,7 @@ export default function CalendarWeekTimeline({
                         if (!position) return null;
 
                         const isSelected = selectedBookingId === booking.id;
+                        const label = getCalendarBookingTitle(booking, user, canViewAll);
 
                         return (
                           <button
@@ -210,9 +211,9 @@ export default function CalendarWeekTimeline({
                               isSelected && 'ring-2 ring-primary ring-offset-1 ring-offset-background',
                             )}
                             style={{ top: position.top, height: position.height, minHeight: '1rem' }}
-                            title={`${booking.title} · ${booking.resource_name || ''} · ${format(new Date(booking.start_time), 'h:mm a')} – ${format(new Date(booking.end_time), 'h:mm a')}`}
+                            title={`${label} · ${booking.resource_name || ''} · ${format(new Date(booking.start_time), 'h:mm a')} – ${format(new Date(booking.end_time), 'h:mm a')}`}
                           >
-                            <p className="text-[9px] sm:text-[10px] font-semibold truncate leading-tight">{booking.title}</p>
+                            <p className="text-[9px] sm:text-[10px] font-semibold truncate leading-tight">{label}</p>
                             <p className="text-[8px] sm:text-[9px] opacity-90 truncate hidden sm:block">{booking.resource_name}</p>
                             <p className="text-[8px] opacity-80 truncate hidden md:block">
                               {format(new Date(booking.start_time), 'h:mm a')}
