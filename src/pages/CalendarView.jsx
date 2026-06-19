@@ -26,6 +26,7 @@ import {
   getBookingsForDay,
   getBookingsInWeek,
   toDateTimeLocalValue,
+  getCalendarBookingTitle,
 } from '@/lib/calendarUtils';
 import {
   format, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
@@ -114,8 +115,8 @@ export default function CalendarView() {
   });
 
   const visibleBookings = useMemo(
-    () => filterCalendarBookings(bookings, { user, canViewAll, roomFilter }),
-    [bookings, user, canViewAll, roomFilter],
+    () => filterCalendarBookings(bookings, { roomFilter }),
+    [bookings, roomFilter],
   );
 
   const resourceTypes = useMemo(() => {
@@ -243,6 +244,8 @@ export default function CalendarView() {
     canManage,
     onApprove: handleApprove,
     onReject: handleReject,
+    user,
+    canViewAll,
   };
 
   const pendingStatVisible = canManage && pendingCount > 0;
@@ -467,7 +470,7 @@ export default function CalendarView() {
                               bookingStatusSolid[b.status] || 'bg-muted text-muted-foreground',
                             )}
                           >
-                            {b.title}
+                            {getCalendarBookingTitle(b, user, canViewAll)}
                           </div>
                         ))}
                         {dayBookings.length > 2 && (
@@ -492,6 +495,8 @@ export default function CalendarView() {
               onSelectBooking={handleSelectBooking}
               onSlotCreate={handleSlotCreate}
               canCreate={canBook}
+              user={user}
+              canViewAll={canViewAll}
             />
           </div>
         ) : (
@@ -505,6 +510,8 @@ export default function CalendarView() {
               onSelectBooking={handleSelectBooking}
               onSlotCreate={handleSlotCreate}
               canCreate={canBook}
+              user={user}
+              canViewAll={canViewAll}
             />
           </div>
         )}

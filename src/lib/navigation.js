@@ -186,8 +186,7 @@ export function getDockEntries(user, { hasPermission }, { isCompactNav = false, 
     ? getMobileUserDockItems(user, { hasPermission })
     : getDockNavItems(user, { hasPermission });
 
-  const showProfileInDock = isCompactNav || isMobileUserNav(user);
-  if (!showProfileInDock) {
+  if (isMobileUserNav(user) || !isCompactNav) {
     items = items.filter(item => item.path !== '/profile');
   }
 

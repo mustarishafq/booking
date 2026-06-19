@@ -11,6 +11,8 @@ import {
   getBookingTimelinePosition,
   buildTimelineRows,
   navigateDay,
+  getCalendarBookingTitle,
+  canViewCalendarBookingDetails,
   TIMELINE_START_HOUR,
   TIMELINE_END_HOUR,
 } from '@/lib/calendarUtils';
@@ -35,6 +37,8 @@ export default function CalendarTimeline({
   onSelectBooking,
   onSlotCreate,
   canCreate = false,
+  user,
+  canViewAll = false,
 }) {
   const hours = useMemo(() => getTimelineHours(), []);
   const rows = useMemo(
@@ -169,6 +173,7 @@ export default function CalendarTimeline({
                           if (!position) return null;
 
                           const isSelected = selectedBookingId === booking.id;
+                          const label = getCalendarBookingTitle(booking, user, canViewAll);
 
                           return (
                             <button
@@ -187,10 +192,10 @@ export default function CalendarTimeline({
                                 isSelected && 'ring-2 ring-primary ring-offset-1 ring-offset-background',
                               )}
                               style={{ left: position.left, width: position.width, minWidth: '1.5rem' }}
-                              title={`${booking.title} · ${format(new Date(booking.start_time), 'h:mm a')} – ${format(new Date(booking.end_time), 'h:mm a')}`}
+                              title={`${label} · ${format(new Date(booking.start_time), 'h:mm a')} – ${format(new Date(booking.end_time), 'h:mm a')}`}
                             >
                               <p className="text-[9px] sm:text-[10px] md:text-xs font-semibold truncate leading-tight">
-                                {booking.title}
+                                {label}
                               </p>
                               <p className="text-[8px] sm:text-[9px] md:text-[10px] opacity-90 truncate hidden sm:block">
                                 {format(new Date(booking.start_time), 'h:mm a')} – {format(new Date(booking.end_time), 'h:mm a')}
@@ -237,6 +242,8 @@ export function CalendarDayDetailContent({
   canManage,
   onApprove,
   onReject,
+  user,
+  canViewAll = false,
 }) {
   const displayBookings = selectedBooking
     ? [selectedBooking, ...bookings.filter(b => b.id !== selectedBooking.id)]
@@ -261,6 +268,8 @@ export function CalendarDayDetailContent({
     <div className="space-y-2.5 sm:space-y-3">
       {displayBookings.map(b => {
         const isSelected = selectedBooking?.id === b.id;
+        const showDetails = canViewCalendarBookingDetails(b, user, canViewAll);
+        const title = getCalendarBookingTitle(b, user, canViewAll);
         return (
           <button
             key={b.id}
@@ -274,7 +283,7 @@ export function CalendarDayDetailContent({
             )}
           >
             <div className="flex items-start justify-between gap-2">
-              <p className="text-sm font-semibold leading-snug line-clamp-2">{b.title}</p>
+              <p className="text-sm font-semibold leading-snug line-clamp-2">{title}</p>
               <Badge variant="outline" className={cn('shrink-0 capitalize text-[10px] sm:text-xs border-0', bookingStatusBadge[b.status])}>
                 {b.status}
               </Badge>
@@ -294,7 +303,7 @@ export function CalendarDayDetailContent({
               </span>
             </div>
 
-            {b.booked_by_email && (
+            {showDetails && b.booked_by_email && (
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <User className="w-3 h-3 shrink-0" />
                 <span className="truncate">{b.booked_by_name || b.booked_by_email}</span>
@@ -336,6 +345,8 @@ export function CalendarDayDetail({
   canManage,
   onApprove,
   onReject,
+  user,
+  canViewAll = false,
   className,
 }) {
   return (
@@ -365,6 +376,8 @@ export function CalendarDayDetail({
           canManage={canManage}
           onApprove={onApprove}
           onReject={onReject}
+          user={user}
+          canViewAll={canViewAll}
         />
       </CardContent>
     </Card>

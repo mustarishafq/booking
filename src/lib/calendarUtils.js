@@ -21,12 +21,27 @@ export const TIMELINE_MIN_DURATION_MINUTES = 30;
 
 const HIDDEN_STATUSES = new Set(['cancelled', 'rejected']);
 
-export function filterCalendarBookings(bookings, { user, canViewAll, roomFilter = 'all' }) {
-  let list = bookings.filter(b => !HIDDEN_STATUSES.has(b.status));
+export function isOwnBooking(booking, user) {
+  const email = user?.email?.toLowerCase();
+  if (!email || !booking?.booked_by_email) return false;
+  return booking.booked_by_email.toLowerCase() === email;
+}
 
-  if (!canViewAll) {
-    list = list.filter(b => b.booked_by_email === user?.email);
+export function canViewCalendarBookingDetails(booking, user, canViewAll) {
+  if (canViewAll) return true;
+  return isOwnBooking(booking, user);
+}
+
+export function getCalendarBookingTitle(booking, user, canViewAll) {
+  if (canViewCalendarBookingDetails(booking, user, canViewAll)) {
+    return booking.title || 'Booking';
   }
+  return 'Booked';
+}
+
+/** Calendar shows all active bookings so users can see resource availability. */
+export function filterCalendarBookings(bookings, { roomFilter = 'all' } = {}) {
+  let list = bookings.filter(b => !HIDDEN_STATUSES.has(b.status));
 
   if (roomFilter !== 'all') {
     list = list.filter(b => b.resource_type === roomFilter);

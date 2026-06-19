@@ -23,7 +23,7 @@ export function useIsMobile() {
   return useMediaQuery(MOBILE_BREAKPOINT)
 }
 
-/** Mobile + tablet: dock profile, no top-bar profile, compact user dock */
+/** Mobile + tablet: compact user dock (profile hidden in dock for user role) */
 export function useCompactNav() {
   return useMediaQuery(COMPACT_NAV_BREAKPOINT)
 }

@@ -4,6 +4,7 @@ export const DEFAULT_USER_PERMISSIONS = {
   book_resources: true,
   cancel_own_booking: true,
   view_calendar: true,
+  view_all_calendar_entries: true,
   top_up_credits: true,
   view_own_transactions: true,
 };

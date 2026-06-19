@@ -13,6 +13,7 @@ import {
   getWeekBookingPosition,
   navigateWeek,
   getBookingsForDay,
+  getCalendarBookingTitle,
   TIMELINE_START_HOUR,
   TIMELINE_END_HOUR,
   TIMELINE_HOUR_HEIGHT,
@@ -37,6 +38,8 @@ export default function CalendarWeekTimeline({
   onSelectBooking,
   onSlotCreate,
   canCreate = false,
+  user,
+  canViewAll = false,
 }) {
   const weekDays = useMemo(() => getWeekDays(date), [date]);
   const hours = useMemo(() => getTimelineHours(), []);
