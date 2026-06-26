@@ -322,6 +322,11 @@ INSERT IGNORE INTO settings (`key`, `value`) VALUES (
   '{"enabled":false,"secret":"","issuer":"","default_role":"user","default_role_id":null}'
 );
 
+INSERT IGNORE INTO settings (`key`, `value`) VALUES (
+  'mcp_api',
+  '{"api_key":"","rate_limit":60}'
+);
+
 -- Existing databases: run once if upgrading
 -- ALTER TABLE resources ADD COLUMN requires_approval TINYINT(1) NOT NULL DEFAULT 1 AFTER image_url;
 -- ALTER TABLE resources ADD COLUMN pic_user_id CHAR(36) DEFAULT NULL AFTER requires_approval;

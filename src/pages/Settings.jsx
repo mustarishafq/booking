@@ -13,7 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Shield, CheckCircle2, Mail, Send, Bell, X,
   MessageCircle, Settings as SettingsIcon, Webhook, Plus, Trash2,
-  Eye, EyeOff, Copy, RefreshCw, KeyRound, Database, Loader2, ScrollText, Wrench,
+  Eye, EyeOff, Copy, RefreshCw, KeyRound, Database, Loader2, ScrollText, Wrench, Brain,
 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -803,6 +803,228 @@ function NexusSsoSettings() {
   );
 }
 
+function McpApiSettings() {
+  const [cfg, setCfg] = useState({
+    api_key: '',
+    api_key_set: false,
+    rate_limit: 60,
+    env_key_configured: false,
+  });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [copiedCatalog, setCopiedCatalog] = useState(false);
+  const [copiedKey, setCopiedKey] = useState(false);
+  const [showKey, setShowKey] = useState(false);
+
+  const resolvedCatalogUrl = API_BASE.startsWith('http')
+    ? `${API_BASE.replace(/\/api$/, '')}/api/mcp/v1/catalog`
+    : `${window.location.origin}/api/mcp/v1/catalog`;
+
+  useEffect(() => {
+    fetch(`${API_BASE}/settings`, { headers: { Authorization: `Bearer ${getToken()}` } })
+      .then(r => r.json())
+      .then(settings => {
+        const mcp = settings.mcp_api || {};
+        setCfg({
+          api_key: '',
+          api_key_set: !!mcp.api_key_set,
+          rate_limit: mcp.rate_limit || 60,
+          env_key_configured: !!mcp.env_key_configured,
+        });
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, []);
+
+  const save = async () => {
+    if (cfg.api_key && cfg.api_key.length < 32) {
+      toast.error('API key must be at least 32 characters.');
+      return;
+    }
+    if (!cfg.api_key && !cfg.api_key_set && !cfg.env_key_configured) {
+      toast.error('Generate or paste an API key before saving.');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const payload = {
+        mcp_api: {
+          rate_limit: Number(cfg.rate_limit) || 60,
+        },
+      };
+      if (cfg.api_key) payload.mcp_api.api_key = cfg.api_key;
+
+      const res = await fetch(`${API_BASE}/settings`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error((await res.json()).message);
+      if (cfg.api_key) setCfg(c => ({ ...c, api_key: '', api_key_set: true }));
+      toast.success('MCP API settings saved.');
+    } catch (e) {
+      toast.error(e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const testConnection = async () => {
+    if (cfg.api_key && cfg.api_key.length >= 32 && !cfg.api_key_set) {
+      toast.error('Save the new API key before testing the catalog connection.');
+      return;
+    }
+
+    setTesting(true);
+    try {
+      const res = await fetch(`${API_BASE}/settings/test-mcp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+        body: JSON.stringify(cfg.api_key ? { api_key: cfg.api_key } : {}),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.message);
+      toast.success(data.message);
+    } catch (e) {
+      toast.error(e.message);
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const copyCatalogUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(resolvedCatalogUrl);
+      setCopiedCatalog(true);
+      setTimeout(() => setCopiedCatalog(false), 2000);
+    } catch { /* clipboard unavailable */ }
+  };
+
+  const copyApiKey = async () => {
+    if (!cfg.api_key) return;
+    try {
+      await navigator.clipboard.writeText(cfg.api_key);
+      setCopiedKey(true);
+      setTimeout(() => setCopiedKey(false), 2000);
+    } catch { /* clipboard unavailable */ }
+  };
+
+  const isConfigured = cfg.api_key_set || cfg.env_key_configured;
+
+  if (loading) return <SettingsSectionSkeleton />;
+
+  return (
+    <SettingsSectionCard
+      icon={Brain}
+      iconColor="info"
+      title="Nexus Brain MCP API"
+      description="Expose this booking system to EMZI Nexus Brain via the MCP catalog"
+    >
+      {cfg.env_key_configured && (
+        <div className="rounded-xl border border-info/30 bg-info/5 px-3.5 py-3 text-sm text-muted-foreground">
+          An MCP API key is also set via the <code className="bg-muted px-1 py-0.5 rounded text-[11px]">MCP_API_KEY</code> environment variable.
+          Environment keys always remain valid alongside any key saved here.
+        </div>
+      )}
+
+      <div className="space-y-4">
+        <div className="space-y-1.5">
+          <Label className="text-sm font-medium">Catalog URL</Label>
+          <p className="text-xs text-muted-foreground">
+            Register this URL in Nexus Brain → Connected Systems as the catalog endpoint.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <Input readOnly value={resolvedCatalogUrl} className="font-mono text-xs" />
+            <Button type="button" variant="outline" onClick={copyCatalogUrl} className="shrink-0 gap-1.5">
+              {copiedCatalog ? <CheckCircle2 className="w-4 h-4 text-success" /> : <Copy className="w-4 h-4" />}
+              {copiedCatalog ? 'Copied' : 'Copy'}
+            </Button>
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label className="text-sm font-medium">API Key</Label>
+          <p className="text-xs text-muted-foreground">
+            Min. 32 characters. Use the same value in Nexus Brain when connecting this system.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <div className="relative flex-1 min-w-0">
+              <Input
+                type={showKey ? 'text' : 'password'}
+                value={cfg.api_key}
+                onChange={e => setCfg(c => ({ ...c, api_key: e.target.value, api_key_set: false }))}
+                placeholder={
+                  cfg.api_key_set
+                    ? '••••••••  (saved — enter new to change)'
+                    : 'Generate or paste an API key'
+                }
+                className="font-mono text-xs pr-10"
+              />
+              <button
+                type="button"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                onClick={() => setShowKey(v => !v)}
+                aria-label={showKey ? 'Hide API key' : 'Show API key'}
+              >
+                {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setCfg(c => ({ ...c, api_key: generateApiKey(), api_key_set: false }))}
+              className="shrink-0 gap-1.5"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Generate
+            </Button>
+            {cfg.api_key && (
+              <Button type="button" variant="outline" onClick={copyApiKey} className="shrink-0 gap-1.5">
+                {copiedKey ? <CheckCircle2 className="w-4 h-4 text-success" /> : <Copy className="w-4 h-4" />}
+                {copiedKey ? 'Copied' : 'Copy key'}
+              </Button>
+            )}
+          </div>
+        </div>
+
+        <div className="space-y-1.5 max-w-xs">
+          <Label className="text-sm font-medium">Rate limit (requests / minute)</Label>
+          <Input
+            type="number"
+            min={1}
+            max={1000}
+            value={cfg.rate_limit}
+            onChange={e => setCfg(c => ({ ...c, rate_limit: e.target.value }))}
+          />
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+          <SaveButton onClick={save} saving={saving} label="Save MCP Settings" />
+          <Button
+            type="button"
+            variant="outline"
+            onClick={testConnection}
+            disabled={testing || (!isConfigured && !cfg.api_key)}
+            className="gap-1.5"
+          >
+            {testing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+            {testing ? 'Testing…' : 'Test catalog connection'}
+          </Button>
+        </div>
+
+        {isConfigured && (
+          <p className="text-xs text-success flex items-center gap-1.5">
+            <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+            MCP API key is configured{cfg.env_key_configured && cfg.api_key_set ? ' (env + settings)' : ''}.
+          </p>
+        )}
+      </div>
+    </SettingsSectionCard>
+  );
+}
+
 function WebhookSettings() {
   const [webhooks, setWebhooks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -895,12 +1117,14 @@ function WebhookSettings() {
         </div>
       )}
 
-      <Button type="button" variant="outline" onClick={() => setWebhooks(list => [...list, createWebhook()])} className="w-full md:w-auto gap-2">
-        <Plus className="w-4 h-4" />
-        Add Webhook
-      </Button>
+      <div className="flex flex-col sm:flex-row flex-wrap gap-3">
+        <Button type="button" variant="outline" onClick={() => setWebhooks(list => [...list, createWebhook()])} className="w-full sm:w-auto gap-2">
+          <Plus className="w-4 h-4" />
+          Add Webhook
+        </Button>
 
-      <SaveButton onClick={save} saving={saving} label="Save Webhooks" />
+        <SaveButton onClick={save} saving={saving} label="Save Webhooks" />
+      </div>
     </SettingsSectionCard>
   );
 }
@@ -1203,7 +1427,7 @@ export default function Settings() {
       <PageHeader
         icon={SettingsIcon}
         title="Settings"
-        description="Email, WhatsApp, SSO, webhooks, and data management"
+        description="Email, WhatsApp, SSO, MCP, webhooks, and data management"
       />
 
       {!isAdmin ? (
@@ -1214,7 +1438,7 @@ export default function Settings() {
         />
       ) : (
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="h-auto w-full grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-1 p-1 lg:inline-flex lg:h-10 lg:w-auto">
+          <TabsList className="h-auto w-full grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-1 p-1 lg:inline-flex lg:h-10 lg:w-auto">
             <TabsTrigger
               value="email"
               className="gap-1 sm:gap-1.5 text-xs sm:text-sm py-2.5 lg:py-1.5 flex flex-col sm:flex-row items-center justify-center min-h-[44px] lg:min-h-0"
@@ -1235,6 +1459,13 @@ export default function Settings() {
             >
               <KeyRound className="w-4 h-4 shrink-0" />
               <span>SSO</span>
+            </TabsTrigger>
+            <TabsTrigger
+              value="mcp"
+              className="gap-1 sm:gap-1.5 text-xs sm:text-sm py-2.5 lg:py-1.5 flex flex-col sm:flex-row items-center justify-center min-h-[44px] lg:min-h-0"
+            >
+              <Brain className="w-4 h-4 shrink-0" />
+              <span>MCP</span>
             </TabsTrigger>
             <TabsTrigger
               value="webhooks"
@@ -1267,6 +1498,9 @@ export default function Settings() {
           </TabsContent>
           <TabsContent value="sso" className="mt-0 space-y-6">
             <NexusSsoSettings />
+          </TabsContent>
+          <TabsContent value="mcp" className="mt-0 space-y-6">
+            <McpApiSettings />
           </TabsContent>
           <TabsContent value="webhooks" className="mt-0 space-y-6">
             <WebhookSettings />

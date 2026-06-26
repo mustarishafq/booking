@@ -10,6 +10,11 @@ import { sendTestMail } from '../emailer.js';
 import { sendTestWA } from '../whatsapp.js';
 import { sendTestWebhook, parseWebhooksForApi, serializeWebhooks, generateWebhookSecret } from '../webhooks.js';
 import { writeAuditLog } from '../audit.js';
+import {
+  invalidateMcpConfigCache,
+  parseMcpApiSettings,
+  DEFAULT_RATE_LIMIT,
+} from '../config/mcp.js';
 
 const router = Router();
 const UPLOAD_DIR = join(dirname(fileURLToPath(import.meta.url)), '../uploads');
@@ -40,8 +45,9 @@ const WA_KEYS = [
 const WEBHOOK_KEYS = ['webhooks'];
 
 const NEXUS_SSO_KEYS = ['nexus_sso'];
+const MCP_API_KEYS = ['mcp_api'];
 
-const ALLOWED_KEYS = [...EMAIL_KEYS, ...WA_KEYS, ...WEBHOOK_KEYS, ...NEXUS_SSO_KEYS];
+const ALLOWED_KEYS = [...EMAIL_KEYS, ...WA_KEYS, ...WEBHOOK_KEYS, ...NEXUS_SSO_KEYS, ...MCP_API_KEYS];
 
 const DEFAULT_NEXUS_SSO = {
   enabled: false,
@@ -73,6 +79,16 @@ function nexusSsoForApi(raw) {
   };
 }
 
+function mcpApiForApi(raw, envKeyConfigured) {
+  const cfg = parseMcpApiSettings(raw);
+  return {
+    api_key: '',
+    api_key_set: cfg.api_key.length >= 32,
+    rate_limit: cfg.rate_limit || DEFAULT_RATE_LIMIT,
+    env_key_configured: !!envKeyConfigured,
+  };
+}
+
 // GET /api/settings — load all settings (admin)
 router.get('/', requireAdmin, async (req, res) => {
   try {
@@ -86,6 +102,8 @@ router.get('/', requireAdmin, async (req, res) => {
     result.wa_token = '';
     result.webhooks = parseWebhooksForApi(result.webhooks, result);
     result.nexus_sso = nexusSsoForApi(result.nexus_sso);
+    const envKeyConfigured = !!(process.env.MCP_API_KEY || process.env.MCP_API_KEYS);
+    result.mcp_api = mcpApiForApi(result.mcp_api, envKeyConfigured);
     delete result.nexus_sso_raw;
     res.json(result);
   } catch (e) {
@@ -127,6 +145,30 @@ router.patch('/', requireAdmin, async (req, res) => {
           default_role: merged.default_role || 'user',
           default_role_id: merged.default_role_id || null,
         });
+      }
+      if (key === 'mcp_api') {
+        const incoming = typeof value === 'string' ? JSON.parse(value) : value;
+        const [existingRows] = await pool.query('SELECT `value` FROM settings WHERE `key` = ?', ['mcp_api']);
+        const existing = parseMcpApiSettings(existingRows[0]?.value);
+
+        const merged = {
+          ...existing,
+          ...incoming,
+          api_key: incoming.api_key || existing.api_key,
+        };
+
+        if (merged.api_key && merged.api_key.length < 32) {
+          return res.status(400).json({ message: 'MCP API key must be at least 32 characters.' });
+        }
+
+        const rateLimit = Math.max(1, parseInt(merged.rate_limit, 10) || DEFAULT_RATE_LIMIT);
+
+        value = JSON.stringify({
+          api_key: merged.api_key || '',
+          rate_limit: rateLimit,
+        });
+
+        invalidateMcpConfigCache();
       }
       if (key === 'webhooks') {
         const incoming = typeof value === 'string' ? JSON.parse(value) : value;
@@ -313,6 +355,54 @@ router.post('/clear-data', requireAdmin, async (req, res) => {
     res.status(500).json({ message: e.message });
   } finally {
     conn.release();
+  }
+});
+
+// POST /api/settings/test-mcp — verify MCP catalog is reachable with configured key (admin)
+router.post('/test-mcp', requireAdmin, async (req, res) => {
+  try {
+    const testKey = (req.body?.api_key || '').trim();
+    const { getMcpConfig, getEnvMcpConfig } = await import('../config/mcp.js');
+    const config = await getMcpConfig();
+    const keyToUse = testKey || config.apiKeys[0];
+
+    if (!keyToUse || keyToUse.length < 32) {
+      return res.status(400).json({
+        ok: false,
+        message: 'Configure an MCP API key (min 32 characters) before testing.',
+      });
+    }
+
+    const envOnly = getEnvMcpConfig();
+    const keyKnown = config.apiKeys.includes(keyToUse)
+      || (testKey && testKey.length >= 32);
+
+    if (!keyKnown) {
+      return res.status(400).json({ ok: false, message: 'API key does not match saved configuration.' });
+    }
+
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const response = await fetch(`${baseUrl}/api/mcp/v1/catalog`, {
+      headers: { 'X-API-Key': keyToUse, Accept: 'application/json' },
+    });
+    const body = await response.json().catch(() => null);
+
+    if (!response.ok || !body?.success) {
+      return res.status(500).json({
+        ok: false,
+        message: body?.message || `Catalog request failed (HTTP ${response.status}).`,
+      });
+    }
+
+    res.json({
+      ok: true,
+      message: `MCP catalog reachable (${body.data?.length ?? 0} endpoints).`,
+      endpoint_count: body.data?.length ?? 0,
+      catalog_url: `${baseUrl}/api/mcp/v1/catalog`,
+      env_key_configured: envOnly.envKeyConfigured,
+    });
+  } catch (e) {
+    res.status(500).json({ ok: false, message: e.message });
   }
 });
 

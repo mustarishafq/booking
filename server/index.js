@@ -21,6 +21,7 @@ import notificationsRouter from './routes/notifications.js';
 import uploadRouter from './routes/upload.js';
 import auditRouter from './routes/audit.js';
 import resourceCareRouter from './routes/resourceCare.js';
+import mcpRouter from './routes/mcp/index.js';
 import { createEntityRouter } from './routes/entities.js';
 import { processCareReminders } from './resourceCare.js';
 
@@ -50,6 +51,9 @@ app.use('/api/auth',         authRouter);
 
 // Nexus SSO
 app.use('/api/sso',          ssoRouter);
+
+// EMZI Nexus Brain MCP API Layer
+app.use('/api/mcp',          mcpRouter);
 
 // User management (admin)
 app.use('/api/users',        usersRouter);

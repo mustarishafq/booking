@@ -13,6 +13,7 @@
     "migrate": "node server/migrate.js",
     "server": "node server/index.js",
     "server:dev": "node --watch server/index.js",
+    "test:mcp": "node --test server/test/mcp.test.js",
     "dev:full": "npm run migrate && concurrently --names \"api,vite\" --prefix-colors \"cyan,magenta\" \"npm run server:dev\" \"npm run dev\""
   },
   "dependencies": {
