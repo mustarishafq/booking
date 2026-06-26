@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CreditCard, Menu, User, LogOut, Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -18,12 +19,14 @@ import { useUnreadNotificationCount } from '@/hooks/useNotifications';
 import { hasPermission } from '@/lib/permissions';
 import { getSidebarItems, isAdminNav, isMobileUserNav } from '@/lib/navigation';
 import { db } from '@/api/base44Client';
+import NotificationPanel from '@/components/notifications/NotificationPanel';
 
 function formatBadgeCount(count) {
   return count > 99 ? '99+' : count;
 }
 
 export default function TopBar({ user, onMenuOpen, embedded = false }) {
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const isMobile = useIsMobile();
   const sidebarItems = user ? getSidebarItems(user, { hasPermission }, { isMobile }) : [];
   const showUserMobileMenu = isMobile && isMobileUserNav(user);
@@ -72,18 +75,21 @@ export default function TopBar({ user, onMenuOpen, embedded = false }) {
 
           {!isMobile && user && (
             <>
-              <Link
-                to="/notifications"
+              <button
+                type="button"
                 className="relative p-2 rounded-lg hover:bg-muted transition-colors"
                 aria-label="Notifications"
+                onClick={() => setNotificationsOpen(prev => !prev)}
               >
                 <Bell className="h-5 w-5" />
                 {unread.count > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold flex items-center justify-center animate-pulse px-0.5">
+                  <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center px-0.5">
                     {formatBadgeCount(unread.count)}
                   </span>
                 )}
-              </Link>
+              </button>
+
+              <NotificationPanel open={notificationsOpen} onOpenChange={setNotificationsOpen} />
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

@@ -1,6 +1,6 @@
 import { db } from '@/api/base44Client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -8,9 +8,19 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { Popover, PopoverTrigger } from '@/components/ui/popover';
+import { ComboboxTrigger, ComboboxContent } from '@/components/ui/combobox';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
 
 import { useQueryClient, useQuery } from '@tanstack/react-query';
-import { Loader2, Trash2, Upload, ImageIcon, X } from 'lucide-react';
+import { Loader2, Trash2, Upload, ImageIcon, X, Check, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import ResourceCarePanel from '@/components/resources/ResourceCarePanel';
@@ -37,9 +47,27 @@ export default function ResourceFormDialog({ open, onClose, resource, user }) {
   const [form, setForm] = useState(defaultForm);
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState('');
+  const [typeOpen, setTypeOpen] = useState(false);
+  const [typeSearch, setTypeSearch] = useState('');
 
   const isInternal = user?.user_type === 'internal';
   const canManageCare = hasPermission(user, 'manage_resources');
+
+  const { data: resources = [] } = useQuery({
+    queryKey: ['resources'],
+    queryFn: () => db.entities.Resource.list(),
+    enabled: open,
+  });
+
+  const existingTypes = useMemo(() => {
+    const types = new Set(resources.map(r => r.resource_type).filter(Boolean));
+    if (form.resource_type) types.add(form.resource_type);
+    return [...types].sort((a, b) => a.localeCompare(b));
+  }, [resources, form.resource_type]);
+
+  const trimmedTypeSearch = typeSearch.trim();
+  const canCreateType = trimmedTypeSearch
+    && !existingTypes.some(t => t.toLowerCase() === trimmedTypeSearch.toLowerCase());
 
   const { data: users = [] } = useQuery({
     queryKey: ['users'],
@@ -199,7 +227,88 @@ export default function ResourceFormDialog({ open, onClose, resource, user }) {
             </div>
             <div className="space-y-1.5">
               <Label>Type *</Label>
-              <Input value={form.resource_type} onChange={e => set('resource_type', e.target.value)} placeholder="e.g. Car, Room, Boat…" />
+              <Popover
+                open={typeOpen}
+                onOpenChange={(next) => {
+                  setTypeOpen(next);
+                  if (!next) setTypeSearch('');
+                }}
+              >
+                <PopoverTrigger asChild>
+                  <ComboboxTrigger aria-expanded={typeOpen}>
+                    {form.resource_type ? (
+                      <span className="text-foreground">{form.resource_type}</span>
+                    ) : (
+                      <span className="text-muted-foreground">e.g. Car, Room, Boat…</span>
+                    )}
+                  </ComboboxTrigger>
+                </PopoverTrigger>
+                <ComboboxContent>
+                  <Command shouldFilter>
+                    <CommandInput
+                      placeholder="Search types…"
+                      value={typeSearch}
+                      onValueChange={setTypeSearch}
+                    />
+                    <CommandList>
+                      <CommandEmpty>
+                        {canCreateType ? (
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-2 text-sm"
+                            onClick={() => {
+                              set('resource_type', trimmedTypeSearch);
+                              setTypeOpen(false);
+                              setTypeSearch('');
+                            }}
+                          >
+                            <Plus className="h-4 w-4" />
+                            Add &ldquo;{trimmedTypeSearch}&rdquo;
+                          </button>
+                        ) : (
+                          'No matching type.'
+                        )}
+                      </CommandEmpty>
+                      <CommandGroup>
+                        {existingTypes.map(type => (
+                          <CommandItem
+                            key={type}
+                            value={type}
+                            onSelect={() => {
+                              set('resource_type', type);
+                              setTypeOpen(false);
+                              setTypeSearch('');
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                'h-4 w-4 shrink-0',
+                                form.resource_type === type ? 'opacity-100' : 'opacity-0',
+                              )}
+                            />
+                            {type}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                      {canCreateType && (
+                        <CommandGroup forceMount>
+                          <CommandItem
+                            value={trimmedTypeSearch}
+                            onSelect={() => {
+                              set('resource_type', trimmedTypeSearch);
+                              setTypeOpen(false);
+                              setTypeSearch('');
+                            }}
+                          >
+                            <Plus className="h-4 w-4 shrink-0" />
+                            Add &ldquo;{trimmedTypeSearch}&rdquo;
+                          </CommandItem>
+                        </CommandGroup>
+                      )}
+                    </CommandList>
+                  </Command>
+                </ComboboxContent>
+              </Popover>
             </div>
           </div>
 

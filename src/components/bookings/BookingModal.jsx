@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { addWeeks } from 'date-fns';
 import { toast } from 'sonner';
 import {
-  Loader2, Building2, CalendarPlus,
+  Loader2, Building2, CalendarPlus, Check,
 } from 'lucide-react';
 
 import {
@@ -19,10 +19,29 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import { calcBookingCost, bookingDurationLabel } from '@/lib/bookingUtils';
+import { Popover, PopoverTrigger } from '@/components/ui/popover';
+import { ComboboxTrigger, ComboboxContent } from '@/components/ui/combobox';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
+import { cn } from '@/lib/utils';
+import {
+  calcBookingCost,
+  bookingDurationLabel,
+  BOOKING_DURATION_PRESETS,
+  getDurationMinutes,
+  matchDurationPreset,
+  formatDurationMinutes,
+  addMinutesToDateTimeLocal,
+  defaultBookingStartTime,
+} from '@/lib/bookingUtils';
 
 const emptyForm = {
   resource_id: '',
@@ -47,6 +66,8 @@ export default function BookingModal({
   const queryClient = useQueryClient();
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [resourceOpen, setResourceOpen] = useState(false);
+  const [selectedDuration, setSelectedDuration] = useState(null);
 
   const { data: resources = [] } = useQuery({
     queryKey: ['resources'],
@@ -62,16 +83,73 @@ export default function BookingModal({
 
   useEffect(() => {
     if (!open) return;
+    const startTime = preselectedStartTime || '';
+    const endTime = preselectedEndTime || '';
     setForm({
       ...emptyForm,
       resource_id: preselectedResourceId || '',
-      start_time: preselectedStartTime || '',
-      end_time: preselectedEndTime || '',
+      start_time: startTime,
+      end_time: endTime,
     });
+    setSelectedDuration(
+      startTime && endTime
+        ? matchDurationPreset(getDurationMinutes(startTime, endTime))
+        : null,
+    );
     setSaving(false);
+    setResourceOpen(false);
   }, [open, preselectedResourceId, preselectedStartTime, preselectedEndTime]);
 
-  const activeResources = resources.filter(r => r.status === 'active');
+  const handleDurationSelect = (minutes) => {
+    setSelectedDuration(minutes);
+    setForm(f => {
+      const start = f.start_time || defaultBookingStartTime();
+      return {
+        ...f,
+        start_time: start,
+        end_time: addMinutesToDateTimeLocal(start, minutes),
+      };
+    });
+  };
+
+  const handleStartChange = (startTime) => {
+    setForm(f => {
+      if (!startTime) return { ...f, start_time: startTime };
+
+      let duration = selectedDuration;
+      if (duration == null && f.start_time && f.end_time) {
+        duration = getDurationMinutes(f.start_time, f.end_time) || null;
+      }
+
+      if (duration != null) {
+        return {
+          ...f,
+          start_time: startTime,
+          end_time: addMinutesToDateTimeLocal(startTime, duration),
+        };
+      }
+
+      return { ...f, start_time: startTime };
+    });
+  };
+
+  const handleEndChange = (endTime) => {
+    setForm(f => ({ ...f, end_time: endTime }));
+    if (form.start_time && endTime) {
+      setSelectedDuration(matchDurationPreset(getDurationMinutes(form.start_time, endTime)));
+    } else {
+      setSelectedDuration(null);
+    }
+  };
+
+  const customDurationMinutes = form.start_time && form.end_time && selectedDuration == null
+    ? getDurationMinutes(form.start_time, form.end_time)
+    : 0;
+
+  const isInternal = user?.user_type === 'internal';
+  const activeResources = resources
+    .filter(r => r.status === 'active')
+    .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   const selected = resources.find(r => r.id === form.resource_id);
   const singleCost = calcBookingCost(selected, form.start_time, form.end_time);
   const totalCost = form.is_recurring ? singleCost * Number(form.recurrence_weeks) : singleCost;
@@ -95,7 +173,6 @@ export default function BookingModal({
     if (e <= s) { toast.error('End must be after start.'); return; }
 
     const isAdmin = user?.role === 'admin';
-    const isInternal = user?.user_type === 'internal';
     const balance = user?.credit_balance_cents || 0;
 
     if (isAdmin && !isInternal && totalCost > balance) {
@@ -192,23 +269,55 @@ export default function BookingModal({
 
           <div className="space-y-1.5">
             <Label>Resource *</Label>
-            <Select value={form.resource_id} onValueChange={v => setForm(f => ({ ...f, resource_id: v }))}>
-              <SelectTrigger><SelectValue placeholder="Select a resource" /></SelectTrigger>
-              <SelectContent>
-                {activeResources.map(r => (
-                  <SelectItem key={r.id} value={r.id}>
-                    <span className="font-medium">{r.name}</span>
-                    <span className="text-muted-foreground ml-2 text-xs">
-                      [{r.resource_type}] — RM{r.rate}/{r.pricing_model === 'hourly' ? 'hr' : r.pricing_model === 'daily' ? 'day' : 'flat'}
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Popover open={resourceOpen} onOpenChange={setResourceOpen}>
+              <PopoverTrigger asChild>
+                <ComboboxTrigger aria-expanded={resourceOpen}>
+                  {selected ? (
+                    <>
+                      <span className="font-medium text-foreground">{selected.name}</span>
+                      <span className="text-muted-foreground ml-2 text-xs">[{selected.resource_type}]</span>
+                    </>
+                  ) : (
+                    <span className="text-muted-foreground">Select a resource</span>
+                  )}
+                </ComboboxTrigger>
+              </PopoverTrigger>
+              <ComboboxContent>
+                <Command>
+                  <CommandInput placeholder="Search resources…" />
+                  <CommandList>
+                    <CommandEmpty>No resource found.</CommandEmpty>
+                    <CommandGroup>
+                      {activeResources.map(r => (
+                        <CommandItem
+                          key={r.id}
+                          value={`${r.name} ${r.resource_type}`}
+                          onSelect={() => {
+                            setForm(f => ({ ...f, resource_id: r.id }));
+                            setResourceOpen(false);
+                          }}
+                        >
+                          <Check
+                            className={cn(
+                              'h-4 w-4 shrink-0',
+                              form.resource_id === r.id ? 'opacity-100' : 'opacity-0',
+                            )}
+                          />
+                          <span className="font-medium">{r.name}</span>
+                          <span className="ml-2 text-xs opacity-60">[{r.resource_type}]</span>
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </ComboboxContent>
+            </Popover>
             {selected && (
               <div className="flex gap-2 mt-1 flex-wrap">
                 <Badge variant="outline">{selected.resource_type}</Badge>
-                <Badge variant="outline" className="capitalize">{selected.pricing_model}</Badge>
+                {!isInternal && (
+                  <Badge variant="outline" className="capitalize">{selected.pricing_model}</Badge>
+                )}
                 {selected.capacity > 0 && <Badge variant="outline">Cap: {selected.capacity}</Badge>}
                 {selected.requires_approval !== false && user?.role !== 'admin' && (
                   <Badge variant="outline" className="border-warning/30 text-warning bg-warning/10">
@@ -224,14 +333,47 @@ export default function BookingModal({
             <Input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. Client pickup, Team meeting…" />
           </div>
 
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <Label>Estimated duration</Label>
+              {customDurationMinutes > 0 && (
+                <span className="text-xs text-muted-foreground">
+                  Custom: {formatDurationMinutes(customDurationMinutes)}
+                </span>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {BOOKING_DURATION_PRESETS.map(({ label, minutes }) => (
+                <Button
+                  key={minutes}
+                  type="button"
+                  size="sm"
+                  variant={selectedDuration === minutes ? 'default' : 'outline'}
+                  className="h-8 px-3"
+                  onClick={() => handleDurationSelect(minutes)}
+                >
+                  {label}
+                </Button>
+              ))}
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label>Start *</Label>
-              <Input type="datetime-local" value={form.start_time} onChange={e => setForm(f => ({ ...f, start_time: e.target.value }))} />
+              <Input
+                type="datetime-local"
+                value={form.start_time}
+                onChange={e => handleStartChange(e.target.value)}
+              />
             </div>
             <div className="space-y-1.5">
               <Label>End *</Label>
-              <Input type="datetime-local" value={form.end_time} onChange={e => setForm(f => ({ ...f, end_time: e.target.value }))} />
+              <Input
+                type="datetime-local"
+                value={form.end_time}
+                onChange={e => handleEndChange(e.target.value)}
+              />
             </div>
           </div>
 
