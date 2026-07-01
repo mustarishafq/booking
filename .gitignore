@@ -13,7 +13,7 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
-server/uploads
+server/uploads/*
 *.local
 
 # Editor directories and files
