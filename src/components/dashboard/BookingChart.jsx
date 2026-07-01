@@ -14,7 +14,7 @@ export default function BookingChart({
     const dayStart = startOfDay(date);
     const dayEnd = startOfDay(addDays(date, 1));
     const count = bookings.filter(b => {
-      const bDate = new Date(b.created_date);
+      const bDate = new Date(b.created_at ?? b.created_date);
       return isAfter(bDate, dayStart) && isBefore(bDate, dayEnd);
     }).length;
     return { day: format(date, 'EEE'), bookings: count };
