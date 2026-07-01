@@ -17,7 +17,7 @@ import {
   X, AlertCircle, History,
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
-import { hasPermission } from '@/lib/permissions';
+import { hasPermission, isInternalUser } from '@/lib/permissions';
 import { bookingStatusBadge } from '@/lib/bookingUtils';
 import PageHeader from '@/components/layout/PageHeader';
 import EmptyState from '@/components/ui/EmptyState';
@@ -75,6 +75,7 @@ export default function Bookings() {
   const canViewAll = hasPermission(user, 'view_all_bookings');
   const canManage = hasPermission(user, 'manage_bookings');
   const seeAll = canViewAll || canManage;
+  const hideCost = isInternalUser(user);
 
   const { data: bookings = [], isLoading } = useQuery({
     queryKey: ['bookings'],
@@ -359,6 +360,7 @@ export default function Bookings() {
                 <BookingListItem
                   booking={b}
                   showBooker={seeAll}
+                  hideCost={hideCost}
                   canManage={canManage}
                   canAct={canManage || b.booked_by_email === user?.email}
                   onApprove={handleApprove}
@@ -381,7 +383,9 @@ export default function Bookings() {
                       )}
                       <TableHead className="sticky top-0 z-10 bg-card whitespace-nowrap">Resource</TableHead>
                       <TableHead className="sticky top-0 z-10 bg-card whitespace-nowrap">Date & time</TableHead>
-                      <TableHead className="sticky top-0 z-10 bg-card whitespace-nowrap text-right">Cost</TableHead>
+                      {!hideCost && (
+                        <TableHead className="sticky top-0 z-10 bg-card whitespace-nowrap text-right">Cost</TableHead>
+                      )}
                       <TableHead className="sticky top-0 z-10 bg-card whitespace-nowrap">Status</TableHead>
                       <TableHead className="sticky top-0 z-10 bg-card whitespace-nowrap text-right">Actions</TableHead>
                     </TableRow>
@@ -421,9 +425,11 @@ export default function Bookings() {
                             {format(new Date(b.start_time), 'h:mm a')} – {format(new Date(b.end_time), 'h:mm a')}
                           </p>
                         </TableCell>
-                        <TableCell className="font-medium text-right tabular-nums whitespace-nowrap">
-                          RM{((b.cost_cents || 0) / 100).toFixed(2)}
-                        </TableCell>
+                        {!hideCost && (
+                          <TableCell className="font-medium text-right tabular-nums whitespace-nowrap">
+                            RM{((b.cost_cents || 0) / 100).toFixed(2)}
+                          </TableCell>
+                        )}
                         <TableCell>
                           <Badge variant="outline" className={cn('capitalize', bookingStatusBadge[b.status])}>
                             {b.status}

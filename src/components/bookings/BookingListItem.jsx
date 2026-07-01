@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils';
 export default function BookingListItem({
   booking,
   showBooker = false,
+  hideCost = false,
   canManage = false,
   canAct = false,
   onApprove,
@@ -67,10 +68,12 @@ export default function BookingListItem({
             <p className="text-xs">{format(start, 'h:mm a')} – {format(end, 'h:mm a')}</p>
           </div>
         </div>
-        <div className="flex items-center justify-between sm:justify-end gap-2">
-          <span className="text-xs text-muted-foreground uppercase tracking-wider sm:hidden">Cost</span>
-          <span className="font-semibold tabular-nums">RM{cost}</span>
-        </div>
+        {!hideCost && (
+          <div className="flex items-center justify-between sm:justify-end gap-2">
+            <span className="text-xs text-muted-foreground uppercase tracking-wider sm:hidden">Cost</span>
+            <span className="font-semibold tabular-nums">RM{cost}</span>
+          </div>
+        )}
       </div>
 
       {(showBooker || booking.is_recurring) && (

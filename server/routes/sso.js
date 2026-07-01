@@ -133,9 +133,9 @@ router.post('/nexus/verify', async (req, res) => {
       const id = randomUUID();
       const hash = await bcrypt.hash(randomBytes(32).toString('hex'), 12);
       await pool.query(
-        `INSERT INTO users (id, email, full_name, role, role_id, credit_balance_cents, password_hash, approved, nexus_sso_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [id, email, name, role, role_id, 0, hash, 1, nexusId],
+        `INSERT INTO users (id, email, full_name, role, role_id, user_type, credit_balance_cents, password_hash, approved, nexus_sso_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [id, email, name, role, role_id, 'internal', 0, hash, 1, nexusId],
       );
       const [rows] = await pool.query('SELECT * FROM users WHERE id = ?', [id]);
       user = rows[0];
