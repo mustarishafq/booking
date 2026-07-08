@@ -350,9 +350,9 @@ export function CalendarDayDetail({
   className,
 }) {
   return (
-    <Card className={cn('rounded-2xl border border-border h-fit', className)}>
-      <CardContent className="p-4 md:p-5">
-        <div className="flex items-center justify-between gap-2 mb-4">
+    <Card className={cn('rounded-2xl border border-border flex flex-col max-h-[calc(100dvh-6rem)]', className)}>
+      <CardContent className="p-4 md:p-5 flex flex-col flex-1 min-h-0 overflow-hidden">
+        <div className="flex items-center justify-between gap-2 mb-4 shrink-0">
           <div className="min-w-0">
             <h3 className="text-base font-semibold truncate">
               {date ? format(date, 'EEEE') : 'Select a day'}
@@ -368,17 +368,19 @@ export function CalendarDayDetail({
           )}
         </div>
 
-        <CalendarDayDetailContent
-          date={date}
-          bookings={bookings}
-          selectedBooking={selectedBooking}
-          onSelectBooking={onSelectBooking}
-          canManage={canManage}
-          onApprove={onApprove}
-          onReject={onReject}
-          user={user}
-          canViewAll={canViewAll}
-        />
+        <div className="overflow-y-auto flex-1 min-h-0 -mr-1 pr-1 [scrollbar-width:thin]">
+          <CalendarDayDetailContent
+            date={date}
+            bookings={bookings}
+            selectedBooking={selectedBooking}
+            onSelectBooking={onSelectBooking}
+            canManage={canManage}
+            onApprove={onApprove}
+            onReject={onReject}
+            user={user}
+            canViewAll={canViewAll}
+          />
+        </div>
       </CardContent>
     </Card>
   );
