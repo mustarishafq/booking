@@ -4,6 +4,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { useOutletContext, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
+import { toast } from 'sonner';
 
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -14,17 +15,41 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { format } from 'date-fns';
 import {
   Plus, Search, XCircle, Calendar, Clock, CheckCircle2, Ban, BookOpen, User,
-  X, AlertCircle, History,
+  X, AlertCircle, History, Link2, Phone, Pencil,
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { hasPermission, isInternalUser } from '@/lib/permissions';
-import { bookingStatusBadge } from '@/lib/bookingUtils';
+import {
+  bookingStatusBadge, findPairedSibling, getBookingPhone, isBookingEditable, phoneTelHref,
+} from '@/lib/bookingUtils';
 import PageHeader from '@/components/layout/PageHeader';
 import EmptyState from '@/components/ui/EmptyState';
 import BookingListItem from '@/components/bookings/BookingListItem';
+import ConfirmActionDialog from '@/components/ui/ConfirmActionDialog';
 import { cn } from '@/lib/utils';
 
 const HISTORY_STATUSES = new Set(['completed', 'cancelled', 'rejected']);
+
+const CONFIRM_COPY = {
+  approve: {
+    title: 'Approve this booking?',
+    description: 'The booking will be confirmed and the booker may be charged.',
+    confirmLabel: 'Approve',
+    variant: 'default',
+  },
+  reject: {
+    title: 'Reject this booking?',
+    description: 'The booking request will be rejected. This cannot be undone.',
+    confirmLabel: 'Reject',
+    variant: 'destructive',
+  },
+  cancel: {
+    title: 'Cancel this booking?',
+    description: 'The booking will be cancelled. Credits may be refunded if applicable.',
+    confirmLabel: 'Cancel booking',
+    variant: 'destructive',
+  },
+};
 
 function StatPill({ icon: Icon, label, value, color = 'primary', className }) {
   const colors = {
@@ -66,6 +91,8 @@ export default function Bookings() {
   const [viewTab, setViewTab] = useState(() => (
     searchParams.get('status') === 'pending' ? 'all' : 'upcoming'
   ));
+  const [confirmAction, setConfirmAction] = useState(null);
+  const [actionLoading, setActionLoading] = useState(false);
 
   useEffect(() => {
     const q = searchParams.get('search');
@@ -82,9 +109,20 @@ export default function Bookings() {
     queryFn: () => db.entities.Booking.list('-start_time', 200),
   });
 
+  const { data: resources = [] } = useQuery({
+    queryKey: ['resources'],
+    queryFn: () => db.entities.Resource.list(),
+  });
+
   const { data: allUsers = [] } = useQuery({
     queryKey: ['users'],
     queryFn: () => db.entities.User.list(),
+    enabled: canManage,
+  });
+
+  const { data: transactions = [] } = useQuery({
+    queryKey: ['transactions'],
+    queryFn: () => db.entities.Transaction.list('-created_date', 500),
     enabled: canManage,
   });
 
@@ -155,50 +193,73 @@ export default function Bookings() {
     { key: 'all', label: 'All', icon: BookOpen, count: tabCounts.all },
   ];
 
-  const handleApprove = async (booking) => {
-    await db.entities.Booking.update(booking.id, { status: 'confirmed' });
-    if (booking.cost_cents > 0) {
-      const owner = allUsers.find(u => u.email === booking.booked_by_email);
-      if (owner) {
-        const newBalance = (owner.credit_balance_cents || 0) - booking.cost_cents;
-        await db.entities.User.update(owner.id, { credit_balance_cents: newBalance });
-        await db.entities.Transaction.create({
-          user_email: owner.email,
-          type: 'booking_charge',
-          amount_cents: -booking.cost_cents,
-          balance_after_cents: newBalance,
-          description: `Booking approved: ${booking.title} — ${booking.resource_name}`,
-          booking_id: booking.id,
-        });
+  const requestAction = (type, booking) => setConfirmAction({ type, booking });
+
+  const handleEdit = (booking) => {
+    if (!isBookingEditable(booking)) {
+      toast.error('This booking can no longer be edited.');
+      return;
+    }
+    openBookingModal?.({ booking });
+  };
+
+  const runConfirmedAction = async () => {
+    if (!confirmAction) return;
+    const { type, booking } = confirmAction;
+    setActionLoading(true);
+    try {
+      if (type === 'approve') {
+        await db.entities.Booking.update(booking.id, { status: 'confirmed' });
+        const alreadyCharged = transactions.some(
+          t => t.booking_id === booking.id && t.type === 'booking_charge',
+        );
+        if (booking.cost_cents > 0 && !alreadyCharged) {
+          const owner = allUsers.find(u => u.email === booking.booked_by_email);
+          if (owner) {
+            const newBalance = (owner.credit_balance_cents || 0) - booking.cost_cents;
+            await db.entities.User.update(owner.id, { credit_balance_cents: newBalance });
+            await db.entities.Transaction.create({
+              user_email: owner.email,
+              type: 'booking_charge',
+              amount_cents: -booking.cost_cents,
+              balance_after_cents: newBalance,
+              description: `Booking approved: ${booking.title} — ${booking.resource_name}`,
+              booking_id: booking.id,
+            });
+          }
+        }
+        toast.success('Booking approved');
+      } else if (type === 'reject') {
+        await db.entities.Booking.update(booking.id, { status: 'rejected' });
+        toast.success('Booking rejected');
+      } else if (type === 'cancel') {
+        await db.entities.Booking.update(booking.id, { status: 'cancelled' });
+        if (booking.cost_cents && booking.booked_by_email === user?.email) {
+          const newBalance = (user.credit_balance_cents || 0) + booking.cost_cents;
+          await db.auth.updateMe({ credit_balance_cents: newBalance });
+          await db.entities.Transaction.create({
+            user_email: user.email,
+            type: 'refund',
+            amount_cents: booking.cost_cents,
+            balance_after_cents: newBalance,
+            description: `Refund: ${booking.title} at ${booking.resource_name || booking.room_name}`,
+            booking_id: booking.id,
+          });
+        }
+        toast.success('Booking cancelled');
       }
+      queryClient.invalidateQueries({ queryKey: ['bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      setConfirmAction(null);
+    } catch (err) {
+      toast.error(err.message || 'Action failed');
+    } finally {
+      setActionLoading(false);
     }
-    queryClient.invalidateQueries({ queryKey: ['bookings'] });
-    queryClient.invalidateQueries({ queryKey: ['users'] });
-    queryClient.invalidateQueries({ queryKey: ['transactions'] });
   };
 
-  const handleReject = async (booking) => {
-    await db.entities.Booking.update(booking.id, { status: 'rejected' });
-    queryClient.invalidateQueries({ queryKey: ['bookings'] });
-  };
-
-  const handleCancel = async (booking) => {
-    await db.entities.Booking.update(booking.id, { status: 'cancelled' });
-    if (booking.cost_cents && booking.booked_by_email === user?.email) {
-      const newBalance = (user.credit_balance_cents || 0) + booking.cost_cents;
-      await db.auth.updateMe({ credit_balance_cents: newBalance });
-      await db.entities.Transaction.create({
-        user_email: user.email,
-        type: 'refund',
-        amount_cents: booking.cost_cents,
-        balance_after_cents: newBalance,
-        description: `Refund: ${booking.title} at ${booking.room_name}`,
-        booking_id: booking.id,
-      });
-    }
-    queryClient.invalidateQueries({ queryKey: ['bookings'] });
-    queryClient.invalidateQueries({ queryKey: ['transactions'] });
-  };
+  const confirmCopy = confirmAction ? CONFIRM_COPY[confirmAction.type] : null;
 
   const filterControls = (
     <>
@@ -359,13 +420,16 @@ export default function Bookings() {
               >
                 <BookingListItem
                   booking={b}
+                  pairedSibling={findPairedSibling(b, bookings)}
+                  resources={resources}
                   showBooker={seeAll}
                   hideCost={hideCost}
                   canManage={canManage}
                   canAct={canManage || b.booked_by_email === user?.email}
-                  onApprove={handleApprove}
-                  onReject={handleReject}
-                  onCancel={handleCancel}
+                  onApprove={(booking) => requestAction('approve', booking)}
+                  onReject={(booking) => requestAction('reject', booking)}
+                  onCancel={(booking) => requestAction('cancel', booking)}
+                  onEdit={handleEdit}
                 />
               </motion.div>
             ))}
@@ -391,14 +455,25 @@ export default function Bookings() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filtered.map(b => (
+                    {filtered.map(b => {
+                      const canAct = canManage || b.booked_by_email === user?.email;
+                      const editable = canAct && isBookingEditable(b);
+                      return (
                       <TableRow key={b.id} className="group">
                         <TableCell className="max-w-[200px]">
                           <div>
                             <p className="font-medium truncate">{b.title}</p>
-                            {b.is_recurring && (
-                              <Badge variant="outline" className="text-xs mt-1">Recurring</Badge>
-                            )}
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {b.is_recurring && (
+                                <Badge variant="outline" className="text-xs">Recurring</Badge>
+                              )}
+                              {findPairedSibling(b, bookings) && (
+                                <Badge variant="outline" className="text-xs gap-1 border-primary/30 text-primary bg-primary/5">
+                                  <Link2 className="w-3 h-3" />
+                                  Paired
+                                </Badge>
+                              )}
+                            </div>
                           </div>
                         </TableCell>
                         {seeAll && (
@@ -417,6 +492,14 @@ export default function Bookings() {
                           {b.resource_type && (
                             <span className="text-xs text-muted-foreground">{b.resource_type}</span>
                           )}
+                          {(() => {
+                            const sibling = findPairedSibling(b, bookings);
+                            return sibling ? (
+                              <p className="text-xs text-primary mt-0.5 truncate">
+                                + {sibling.resource_name}
+                              </p>
+                            ) : null;
+                          })()}
                         </TableCell>
                         <TableCell className="whitespace-nowrap">
                           <p className="text-sm">{format(new Date(b.start_time), 'MMM d, yyyy')}</p>
@@ -437,13 +520,41 @@ export default function Bookings() {
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex gap-1 justify-end flex-wrap">
+                            {(() => {
+                              const callHref = phoneTelHref(getBookingPhone(b, resources));
+                              return callHref ? (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8"
+                                  asChild
+                                >
+                                  <a href={callHref} aria-label={`Call ${b.resource_name}`}>
+                                    <Phone className="w-4 h-4 xl:mr-1" />
+                                    <span className="hidden xl:inline">Call</span>
+                                  </a>
+                                </Button>
+                              ) : null;
+                            })()}
+                            {editable && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8"
+                                onClick={() => handleEdit(b)}
+                                aria-label="Edit booking"
+                              >
+                                <Pencil className="w-4 h-4 xl:mr-1" />
+                                <span className="hidden xl:inline">Edit</span>
+                              </Button>
+                            )}
                             {canManage && b.status === 'pending' && (
                               <>
                                 <Button
                                   variant="ghost"
                                   size="sm"
                                   className="h-8 text-success hover:text-success"
-                                  onClick={() => handleApprove(b)}
+                                  onClick={() => requestAction('approve', b)}
                                   aria-label="Approve booking"
                                 >
                                   <CheckCircle2 className="w-4 h-4 xl:mr-1" />
@@ -453,7 +564,7 @@ export default function Bookings() {
                                   variant="ghost"
                                   size="sm"
                                   className="h-8 text-destructive hover:text-destructive"
-                                  onClick={() => handleReject(b)}
+                                  onClick={() => requestAction('reject', b)}
                                   aria-label="Reject booking"
                                 >
                                   <Ban className="w-4 h-4 xl:mr-1" />
@@ -461,12 +572,12 @@ export default function Bookings() {
                                 </Button>
                               </>
                             )}
-                            {b.status === 'confirmed' && (canManage || b.booked_by_email === user?.email) && (
+                            {b.status === 'confirmed' && canAct && (
                               <Button
                                 variant="ghost"
                                 size="sm"
                                 className="h-8 text-destructive hover:text-destructive"
-                                onClick={() => handleCancel(b)}
+                                onClick={() => requestAction('cancel', b)}
                                 aria-label="Cancel booking"
                               >
                                 <XCircle className="w-4 h-4 xl:mr-1" />
@@ -476,7 +587,8 @@ export default function Bookings() {
                           </div>
                         </TableCell>
                       </TableRow>
-                    ))}
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>
@@ -484,6 +596,21 @@ export default function Bookings() {
           </Card>
         </>
       )}
+
+      <ConfirmActionDialog
+        open={!!confirmAction}
+        onOpenChange={(open) => { if (!open && !actionLoading) setConfirmAction(null); }}
+        title={confirmCopy?.title}
+        description={
+          confirmAction
+            ? `${confirmCopy.description}${confirmAction.booking?.title ? ` “${confirmAction.booking.title}”` : ''}${confirmAction.booking?.resource_name ? ` — ${confirmAction.booking.resource_name}` : ''}`
+            : undefined
+        }
+        confirmLabel={confirmCopy?.confirmLabel}
+        variant={confirmCopy?.variant}
+        loading={actionLoading}
+        onConfirm={runConfirmedAction}
+      />
     </div>
   );
 }

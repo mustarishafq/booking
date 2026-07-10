@@ -1,5 +1,5 @@
 const JSON_FIELDS = {
-  resources: ['amenities'],
+  resources: ['amenities', 'pair_with_types'],
   rooms: ['amenities'],
 };
 
@@ -31,6 +31,9 @@ export function serializeResource(row) {
     id: row.id,
     name: row.name,
     resource_type: row.resource_type,
+    pairing_role: row.pairing_role || 'none',
+    pair_with_type: row.pair_with_type || null,
+    pair_with_types: Array.isArray(row.pair_with_types) ? row.pair_with_types : [],
     description: row.description,
     capacity: row.capacity,
     pricing_model: row.pricing_model,
@@ -43,6 +46,7 @@ export function serializeResource(row) {
     pic_name: row.pic_name || null,
     status: row.status,
     location: row.location,
+    phone: row.phone || null,
     odometer_km: row.odometer_km != null ? Number(row.odometer_km) : null,
     care_summary: row.care_summary || null,
     created_at: row.created_at,
@@ -57,6 +61,7 @@ export function serializeBooking(row) {
     resource_id: row.resource_id,
     resource_name: row.resource_name,
     resource_type: row.resource_type,
+    resource_phone: row.resource_phone || null,
     pricing_model: row.pricing_model,
     title: row.title,
     start_time: row.start_time,
@@ -68,6 +73,7 @@ export function serializeBooking(row) {
     is_recurring: !!row.is_recurring,
     recurrence_group_id: row.recurrence_group_id,
     recurrence_weeks: row.recurrence_weeks,
+    booking_group_id: row.booking_group_id || null,
     booked_by_email: row.booked_by_email,
     booked_by_name: row.booked_by_name,
     created_at: row.created_at,

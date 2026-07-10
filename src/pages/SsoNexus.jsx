@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { motion } from 'framer-motion';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { setToken } from '@/api/base44Client';
@@ -55,7 +56,12 @@ export default function SsoNexus() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-background p-6">
-      <div className="w-full max-w-sm text-center space-y-6">
+      <motion.div
+        className="w-full max-w-sm text-center space-y-6"
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+      >
         <div className="flex justify-center">
           <AppLogo size="lg" />
         </div>
@@ -74,7 +80,7 @@ export default function SsoNexus() {
             <p className="text-sm text-muted-foreground">Signing you in via EMZI Nexus Brain…</p>
           </div>
         )}
-      </div>
+      </motion.div>
     </div>
   );
 }

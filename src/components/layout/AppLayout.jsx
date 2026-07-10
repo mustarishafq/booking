@@ -4,12 +4,10 @@ import { useAuth } from '@/lib/AuthContext';
 
 import TopBar from './TopBar';
 import BottomNav from './BottomNav';
-import MobileNavSidebar from './MobileNavSidebar';
 import BookingModal from '@/components/bookings/BookingModal';
 
 export default function AppLayout() {
   const { user, setUser } = useAuth();
-  const [menuOpen, setMenuOpen] = useState(false);
   const [bookingOpen, setBookingOpen] = useState(false);
   const [bookingPreset, setBookingPreset] = useState({
     resourceId: '',
@@ -33,10 +31,9 @@ export default function AppLayout() {
   return (
     <div className="min-h-[100dvh] bg-background flex flex-col">
       <div className="sticky top-0 z-30 shrink-0 transition-all duration-200">
-        <TopBar user={user} onMenuOpen={() => setMenuOpen(true)} embedded />
+        <TopBar user={user} embedded />
       </div>
 
-      <MobileNavSidebar user={user} open={menuOpen} onOpenChange={setMenuOpen} />
       <BookingModal
         open={bookingOpen}
         onOpenChange={setBookingOpen}
@@ -47,7 +44,7 @@ export default function AppLayout() {
         setUser={setUser}
       />
 
-      <main className="flex-1 pb-[calc(4.75rem+env(safe-area-inset-bottom))]">
+      <main className="flex-1 pb-[calc(5.25rem+env(safe-area-inset-bottom))] pt-0">
         <div className="max-w-[1600px] mx-auto p-4 sm:p-6">
           <Outlet context={{ user, setUser, openBookingModal }} />
         </div>

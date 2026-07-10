@@ -53,6 +53,8 @@ export const createBookingSchema = z.object({
   is_recurring: z.boolean().optional(),
   recurrence_group_id: z.string().optional(),
   recurrence_weeks: z.number().int().positive().optional(),
+  booking_group_id: z.string().optional(),
+  resource_phone: z.string().optional(),
   booked_by_email: z.string().email().optional(),
   booked_by_name: z.string().optional(),
 });
@@ -62,6 +64,9 @@ export const updateBookingSchema = createBookingSchema.partial();
 export const createResourceSchema = z.object({
   name: z.string().min(1),
   resource_type: z.string().min(1),
+  pairing_role: z.enum(['none', 'vehicle', 'driver']).optional(),
+  pair_with_type: z.string().nullable().optional(),
+  pair_with_types: z.array(z.string()).optional(),
   description: z.string().optional(),
   capacity: z.number().int().positive().optional(),
   pricing_model: z.enum(['hourly', 'daily', 'flat']).optional(),
@@ -72,6 +77,7 @@ export const createResourceSchema = z.object({
   pic_user_id: z.string().optional(),
   status: z.enum(['active', 'maintenance', 'inactive']).optional(),
   location: z.string().optional(),
+  phone: z.string().optional(),
   odometer_km: z.number().optional(),
 });
 

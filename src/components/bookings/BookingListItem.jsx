@@ -2,13 +2,15 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
 import {
-  Ban, Calendar, CheckCircle2, Clock, MapPin, Repeat, User, XCircle,
+  Ban, Calendar, CheckCircle2, Clock, Link2, MapPin, Pencil, Phone, Repeat, User, XCircle,
 } from 'lucide-react';
-import { bookingStatusBadge } from '@/lib/bookingUtils';
+import { bookingStatusBadge, getBookingPhone, isBookingEditable, phoneTelHref } from '@/lib/bookingUtils';
 import { cn } from '@/lib/utils';
 
 export default function BookingListItem({
   booking,
+  pairedSibling = null,
+  resources = [],
   showBooker = false,
   hideCost = false,
   canManage = false,
@@ -16,6 +18,7 @@ export default function BookingListItem({
   onApprove,
   onReject,
   onCancel,
+  onEdit,
   className,
 }) {
   const start = new Date(booking.start_time);
@@ -24,6 +27,11 @@ export default function BookingListItem({
 
   const showPendingActions = canManage && booking.status === 'pending';
   const showCancelAction = booking.status === 'confirmed' && canAct;
+  const showEditAction = canAct && isBookingEditable(booking);
+  const phone = getBookingPhone(booking, resources);
+  const callHref = phoneTelHref(phone);
+  const showMetaRow = showBooker || booking.is_recurring || !!pairedSibling;
+  const showActions = showPendingActions || showCancelAction || showEditAction || !!callHref;
 
   return (
     <div
@@ -76,7 +84,7 @@ export default function BookingListItem({
         )}
       </div>
 
-      {(showBooker || booking.is_recurring) && (
+      {showMetaRow && (
         <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-border/60">
           {showBooker && (
             <div className="flex items-center gap-1.5 min-w-0 text-xs text-muted-foreground">
@@ -92,11 +100,41 @@ export default function BookingListItem({
               Recurring
             </Badge>
           )}
+          {pairedSibling && (
+            <Badge variant="outline" className="text-xs gap-1 h-5 border-primary/30 text-primary bg-primary/5">
+              <Link2 className="w-3 h-3" />
+              Paired with {pairedSibling.resource_name}
+            </Badge>
+          )}
         </div>
       )}
 
-      {(showPendingActions || showCancelAction) && (
+      {showActions && (
         <div className="flex flex-wrap gap-2 pt-1">
+          {callHref && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="flex-1 sm:flex-none h-9"
+              asChild
+            >
+              <a href={callHref}>
+                <Phone className="w-4 h-4 mr-1.5" />
+                Call
+              </a>
+            </Button>
+          )}
+          {showEditAction && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="flex-1 sm:flex-none h-9"
+              onClick={() => onEdit?.(booking)}
+            >
+              <Pencil className="w-4 h-4 mr-1.5" />
+              Edit
+            </Button>
+          )}
           {showPendingActions && (
             <>
               <Button

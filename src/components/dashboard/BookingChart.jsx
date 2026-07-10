@@ -55,14 +55,23 @@ export default function BookingChart({
                   width={28}
                 />
                 <Tooltip
+                  cursor={{ fill: 'hsl(var(--primary) / 0.2)' }}
                   contentStyle={{
                     background: 'hsl(var(--card))',
                     border: '1px solid hsl(var(--border))',
                     borderRadius: '8px',
                     fontSize: '13px',
+                    color: 'hsl(var(--foreground))',
                   }}
+                  labelStyle={{ color: 'hsl(var(--foreground))' }}
+                  itemStyle={{ color: 'hsl(var(--primary))' }}
                 />
-                <Bar dataKey="bookings" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />
+                <Bar
+                  dataKey="bookings"
+                  fill="hsl(var(--primary))"
+                  radius={[6, 6, 0, 0]}
+                  activeBar={{ fill: 'hsl(var(--primary))', opacity: 1 }}
+                />
               </BarChart>
             </ResponsiveContainer>
           </div>

@@ -11,6 +11,10 @@
     "resource_type": {
       "type": "string"
     },
+    "resource_phone": {
+      "type": "string",
+      "description": "Contact phone snapshotted from the resource at booking time"
+    },
     "pricing_model": {
       "type": "string",
       "enum": [
@@ -58,6 +62,10 @@
     },
     "recurrence_weeks": {
       "type": "number"
+    },
+    "booking_group_id": {
+      "type": "string",
+      "description": "Shared id linking paired bookings (e.g. vehicle + driver) for the same time slot"
     },
     "booked_by_email": {
       "type": "string"

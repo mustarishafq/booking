@@ -28,6 +28,7 @@ import { RoleBadge } from '@/pages/Roles';
 import { hasPermission } from '@/lib/permissions';
 import PageHeader from '@/components/layout/PageHeader';
 import EmptyState from '@/components/ui/EmptyState';
+import ConfirmActionDialog from '@/components/ui/ConfirmActionDialog';
 import { statColorMap } from '@/lib/bookingUtils';
 import { cn } from '@/lib/utils';
 
@@ -216,6 +217,8 @@ export default function Users() {
   const [editRoleId, setEditRoleId] = useState('');
   const [editUserType, setEditUserType] = useState('external');
   const [actionLoading, setActionLoading] = useState(null);
+  const [confirmAction, setConfirmAction] = useState(null);
+  const [confirmEditSave, setConfirmEditSave] = useState(false);
 
   const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
@@ -252,18 +255,33 @@ export default function Users() {
   const pendingUsers  = tabFiltered.filter(u => !u.approved);
   const approvedUsers = tabFiltered.filter(u => u.approved);
 
-  const handleApprove = async (userId) => {
-    setActionLoading(userId + '_approve');
-    await fetch(`${API_BASE}/users/${userId}/approve`, { method: 'POST', headers: { Authorization: `Bearer ${getToken()}` } });
-    queryClient.invalidateQueries({ queryKey: ['users'] });
-    setActionLoading(null);
+  const handleApprove = (userId) => {
+    const target = users.find(u => u.id === userId);
+    setConfirmAction({ type: 'approve', userId, label: target?.full_name || target?.email || 'this user' });
   };
 
-  const handleReject = async (userId) => {
-    setActionLoading(userId + '_reject');
-    await fetch(`${API_BASE}/users/${userId}/reject`, { method: 'POST', headers: { Authorization: `Bearer ${getToken()}` } });
-    queryClient.invalidateQueries({ queryKey: ['users'] });
-    setActionLoading(null);
+  const handleReject = (userId) => {
+    const target = users.find(u => u.id === userId);
+    setConfirmAction({ type: 'reject', userId, label: target?.full_name || target?.email || 'this user' });
+  };
+
+  const runConfirmedUserAction = async () => {
+    if (!confirmAction) return;
+    const { type, userId } = confirmAction;
+    setActionLoading(userId + '_' + type);
+    try {
+      await fetch(`${API_BASE}/users/${userId}/${type}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${getToken()}` },
+      });
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      toast.success(type === 'approve' ? 'User approved' : 'User rejected');
+      setConfirmAction(null);
+    } catch (err) {
+      toast.error(err.message || 'Action failed');
+    } finally {
+      setActionLoading(null);
+    }
   };
 
   const handleAddUser = async () => {
@@ -346,7 +364,9 @@ export default function Users() {
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
     }
     queryClient.invalidateQueries({ queryKey: ['users'] });
+    setConfirmEditSave(false);
     setEditUser(null);
+    toast.success('User updated');
   };
 
   const openEdit = (u) => {
@@ -826,10 +846,34 @@ export default function Users() {
                 <Input type="number" step="0.01" min="0" value={editCredits} onChange={e => setEditCredits(e.target.value)} />
               </div>
             )}
-            <Button className="w-full" onClick={handleSave}>Save Changes</Button>
+            <Button className="w-full" onClick={() => setConfirmEditSave(true)}>Save Changes</Button>
           </div>
         </DialogContent>
       </Dialog>
+
+      <ConfirmActionDialog
+        open={!!confirmAction}
+        onOpenChange={(open) => { if (!open && !actionLoading) setConfirmAction(null); }}
+        title={confirmAction?.type === 'approve' ? 'Approve this user?' : 'Reject this user?'}
+        description={
+          confirmAction?.type === 'approve'
+            ? `Approve “${confirmAction?.label}” so they can sign in and book?`
+            : `Reject “${confirmAction?.label}”? This cannot be undone.`
+        }
+        confirmLabel={confirmAction?.type === 'approve' ? 'Approve' : 'Reject'}
+        variant={confirmAction?.type === 'reject' ? 'destructive' : 'default'}
+        loading={!!actionLoading}
+        onConfirm={runConfirmedUserAction}
+      />
+
+      <ConfirmActionDialog
+        open={confirmEditSave}
+        onOpenChange={setConfirmEditSave}
+        title="Save user changes?"
+        description={`Update “${editUser?.full_name || editUser?.email || 'this user'}”?`}
+        confirmLabel="Save changes"
+        onConfirm={handleSave}
+      />
     </div>
   );
 }

@@ -15,12 +15,16 @@ import {
   GanttChartSquare, SlidersHorizontal, Clock, List,
 } from 'lucide-react';
 import { hasPermission } from '@/lib/permissions';
-import { bookingStatusSolid } from '@/lib/bookingUtils';
+import {
+  bookingStatusSolid, isBookingEditable, collapsePairedBookings, findPairedSibling, getPairedResourceLabel,
+} from '@/lib/bookingUtils';
 import PageHeader from '@/components/layout/PageHeader';
 import CalendarTimeline, { CalendarDayDetail, CalendarDayDetailContent } from '@/components/calendar/CalendarTimeline';
 import CalendarWeekTimeline from '@/components/calendar/CalendarWeekTimeline';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import ConfirmActionDialog from '@/components/ui/ConfirmActionDialog';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { toast } from 'sonner';
 import {
   filterCalendarBookings,
   getBookingsForDay,
@@ -103,6 +107,8 @@ export default function CalendarView() {
   const [roomFilter, setRoomFilter] = useState('all');
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [detailSheetOpen, setDetailSheetOpen] = useState(false);
+  const [confirmAction, setConfirmAction] = useState(null);
+  const [actionLoading, setActionLoading] = useState(false);
 
   const { data: bookings = [] } = useQuery({
     queryKey: ['bookings'],
@@ -139,9 +145,13 @@ export default function CalendarView() {
   }, [calendarStart, calendarEnd]);
 
   const timelineDate = selectedDay || new Date();
-  const selectedDayBookings = useMemo(
+  const rawSelectedDayBookings = useMemo(
     () => getBookingsForDay(visibleBookings, timelineDate),
     [visibleBookings, timelineDate],
+  );
+  const selectedDayBookings = useMemo(
+    () => collapsePairedBookings(rawSelectedDayBookings),
+    [rawSelectedDayBookings],
   );
 
   const weekBookings = useMemo(
@@ -150,12 +160,14 @@ export default function CalendarView() {
   );
 
   const monthBookingCount = useMemo(
-    () => visibleBookings.filter(b => isSameMonth(new Date(b.start_time), currentDate)).length,
+    () => collapsePairedBookings(
+      visibleBookings.filter(b => isSameMonth(new Date(b.start_time), currentDate)),
+    ).length,
     [visibleBookings, currentDate],
   );
 
   const todayBookingCount = useMemo(
-    () => getBookingsForDay(visibleBookings, new Date()).length,
+    () => collapsePairedBookings(getBookingsForDay(visibleBookings, new Date())).length,
     [visibleBookings],
   );
 
@@ -183,7 +195,10 @@ export default function CalendarView() {
   };
 
   const handleSelectBooking = (booking) => {
-    setSelectedBooking(booking);
+    const paired = selectedDayBookings.find(
+      b => b.id === booking?.id || b.pairedSibling?.id === booking?.id,
+    );
+    setSelectedBooking(paired || booking);
     setSelectedDay(new Date(booking.start_time));
     if (isMobile) {
       setDetailSheetOpen(true);
@@ -202,14 +217,36 @@ export default function CalendarView() {
     }
   }, [canBook, openBookingModal]);
 
-  const handleApprove = async (booking) => {
-    await db.entities.Booking.update(booking.id, { status: 'confirmed' });
-    queryClient.invalidateQueries({ queryKey: ['bookings'] });
+  const handleApprove = (booking) => setConfirmAction({ type: 'approve', booking });
+  const handleReject = (booking) => setConfirmAction({ type: 'reject', booking });
+
+  const handleEdit = (booking) => {
+    if (!isBookingEditable(booking)) {
+      toast.error('This booking can no longer be edited.');
+      return;
+    }
+    openBookingModal?.({ booking });
   };
 
-  const handleReject = async (booking) => {
-    await db.entities.Booking.update(booking.id, { status: 'rejected' });
-    queryClient.invalidateQueries({ queryKey: ['bookings'] });
+  const runConfirmedAction = async () => {
+    if (!confirmAction) return;
+    const { type, booking } = confirmAction;
+    setActionLoading(true);
+    try {
+      const nextStatus = type === 'approve' ? 'confirmed' : 'rejected';
+      await db.entities.Booking.update(booking.id, { status: nextStatus });
+      const sibling = booking.pairedSibling || findPairedSibling(booking, bookings);
+      if (sibling?.id) {
+        await db.entities.Booking.update(sibling.id, { status: nextStatus });
+      }
+      toast.success(type === 'approve' ? 'Booking approved' : 'Booking rejected');
+      queryClient.invalidateQueries({ queryKey: ['bookings'] });
+      setConfirmAction(null);
+    } catch (err) {
+      toast.error(err.message || 'Action failed');
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const filteredResources = roomFilter === 'all'
@@ -244,8 +281,10 @@ export default function CalendarView() {
     canManage,
     onApprove: handleApprove,
     onReject: handleReject,
+    onEdit: handleEdit,
     user,
     canViewAll,
+    resources,
   };
 
   const pendingStatVisible = canManage && pendingCount > 0;
@@ -413,7 +452,7 @@ export default function CalendarView() {
                   </div>
                 ))}
                 {calendarDays.map((day, i) => {
-                  const dayBookings = getBookingsForDay(visibleBookings, day);
+                  const dayBookings = collapsePairedBookings(getBookingsForDay(visibleBookings, day));
                   const isSelected = selectedDay && isSameDay(day, selectedDay);
                   const today = isToday(day);
                   const inMonth = isSameMonth(day, currentDate);
@@ -462,17 +501,26 @@ export default function CalendarView() {
 
                       {/* Tablet+: booking pills */}
                       <div className="mt-0.5 sm:mt-1 space-y-0.5 hidden sm:block">
-                        {dayBookings.slice(0, 2).map(b => (
+                        {dayBookings.slice(0, 2).map(b => {
+                          const pillLabel = b.isPairedEvent
+                            ? getPairedResourceLabel(b) || getCalendarBookingTitle(b, user, canViewAll)
+                            : getCalendarBookingTitle(b, user, canViewAll);
+                          return (
                           <div
                             key={b.id}
                             className={cn(
                               'text-[10px] md:text-[11px] px-1 py-0.5 rounded truncate leading-tight',
+                              b.isPairedEvent && 'ring-1 ring-inset ring-white/25',
                               bookingStatusSolid[b.status] || 'bg-muted text-muted-foreground',
                             )}
+                            title={b.isPairedEvent
+                              ? `${getCalendarBookingTitle(b, user, canViewAll)} · ${getPairedResourceLabel(b)}`
+                              : undefined}
                           >
-                            {getCalendarBookingTitle(b, user, canViewAll)}
+                            {pillLabel}
                           </div>
-                        ))}
+                          );
+                        })}
                         {dayBookings.length > 2 && (
                           <p className="text-[10px] text-muted-foreground pl-1">
                             +{dayBookings.length - 2} more
@@ -505,7 +553,7 @@ export default function CalendarView() {
               date={timelineDate}
               onDateChange={handleTimelineDateChange}
               resources={filteredResources}
-              dayBookings={selectedDayBookings}
+              dayBookings={rawSelectedDayBookings}
               selectedBookingId={selectedBooking?.id}
               onSelectBooking={handleSelectBooking}
               onSlotCreate={handleSlotCreate}
@@ -546,6 +594,25 @@ export default function CalendarView() {
           </Button>
         </div>
       )}
+
+      <ConfirmActionDialog
+        open={!!confirmAction}
+        onOpenChange={(open) => { if (!open && !actionLoading) setConfirmAction(null); }}
+        title={confirmAction?.type === 'approve' ? 'Approve this booking?' : 'Reject this booking?'}
+        description={
+          confirmAction?.booking?.isPairedEvent
+            ? (confirmAction?.type === 'approve'
+              ? `Confirm “${confirmAction?.booking?.title || 'this booking'}” and its paired resource?`
+              : `Reject “${confirmAction?.booking?.title || 'this booking'}” and its paired resource? This cannot be undone.`)
+            : (confirmAction?.type === 'approve'
+              ? `Confirm “${confirmAction?.booking?.title || 'this booking'}”?`
+              : `Reject “${confirmAction?.booking?.title || 'this booking'}”? This cannot be undone.`)
+        }
+        confirmLabel={confirmAction?.type === 'approve' ? 'Approve' : 'Reject'}
+        variant={confirmAction?.type === 'reject' ? 'destructive' : 'default'}
+        loading={actionLoading}
+        onConfirm={runConfirmedAction}
+      />
     </div>
   );
 }

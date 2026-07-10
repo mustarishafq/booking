@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { motion } from 'framer-motion';
 import { setToken } from '@/api/base44Client';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -116,7 +117,12 @@ export default function Login() {
         </div>
 
         <div className="flex-1 flex items-center justify-center p-6">
-          <div className="w-full max-w-md">
+          <motion.div
+            className="w-full max-w-md"
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+          >
           {/* Mobile logo */}
           <div className="flex lg:hidden items-center justify-center mb-8">
             <AppLogo size="sm" showText textClassName="text-lg" />
@@ -297,7 +303,7 @@ export default function Login() {
           <p className="text-xs text-muted-foreground text-center mt-6 lg:hidden">
             Smart resource booking for modern teams — {APP_NAME}
           </p>
-        </div>
+          </motion.div>
         </div>
       </div>
     </div>

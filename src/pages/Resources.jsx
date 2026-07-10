@@ -5,62 +5,58 @@ import { useOutletContext, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 
-import { Plus, Search, LayoutGrid, List, LayoutList, Boxes, CheckCircle2, Tag, X } from 'lucide-react';
+import { Plus, Search, Boxes, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import ResourceCard from '@/components/resources/ResourceCard';
 import ResourceFormDialog from '@/components/resources/ResourceFormDialog';
 import { hasPermission } from '@/lib/permissions';
-import { useIsMobile } from '@/hooks/use-mobile';
-import PageHeader from '@/components/layout/PageHeader';
+import { getResourceTypeIcon, buildResourceBookingCounts } from '@/lib/resourceVisuals';
 import EmptyState from '@/components/ui/EmptyState';
 import { cn } from '@/lib/utils';
 
-const VIEW_MODES = [
-  { key: 'grid', icon: LayoutGrid, label: 'Grid' },
-  { key: 'list', icon: List, label: 'List' },
-  { key: 'compact', icon: LayoutList, label: 'Compact' },
+const STATUS_FILTERS = [
+  { key: 'all', label: 'All' },
+  { key: 'active', label: 'Active' },
+  { key: 'maintenance', label: 'Care' },
+  { key: 'inactive', label: 'Inactive' },
 ];
 
-const VIEW_STORAGE_KEY = 'resources-view';
+const GRID_CLASS = 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4';
 
-function readStoredViewMode() {
-  try {
-    const stored = localStorage.getItem(VIEW_STORAGE_KEY);
-    return VIEW_MODES.some(v => v.key === stored) ? stored : 'grid';
-  } catch {
-    return 'grid';
-  }
-}
-
-function StatPill({ icon: Icon, label, value, color = 'primary', className }) {
-  const colors = {
-    primary: 'bg-primary/10 text-primary',
-    success: 'bg-success/10 text-success',
-    accent: 'bg-accent/10 text-accent-foreground',
-  };
-
+function TypeChip({ active, label, count, icon: Icon, onClick }) {
   return (
-    <div className={cn('rounded-2xl border border-border bg-card px-4 py-3 flex items-center gap-3 min-w-0', className)}>
-      <div className={cn('w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0', colors[color])}>
-        <Icon className="w-4 h-4" />
-      </div>
-      <div className="min-w-0">
-        <p className="text-lg font-bold leading-none tracking-tight">{value}</p>
-        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mt-1 truncate">{label}</p>
-      </div>
-    </div>
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors flex-shrink-0',
+        active
+          ? 'border-primary bg-primary text-primary-foreground shadow-sm shadow-primary/25'
+          : 'border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted',
+      )}
+    >
+      {Icon && <Icon className="w-3.5 h-3.5 shrink-0 opacity-80" />}
+      {label}
+      <span
+        className={cn(
+          'text-[10px] font-semibold tabular-nums px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center',
+          active ? 'bg-primary-foreground/20' : 'bg-muted',
+        )}
+      >
+        {count}
+      </span>
+    </button>
   );
 }
 
 export default function Resources() {
   const { user, openBookingModal } = useOutletContext();
-  const isMobile = useIsMobile();
   const [searchParams] = useSearchParams();
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
-  const [viewMode, setViewMode] = useState(readStoredViewMode);
+  const [statusFilter, setStatusFilter] = useState('all');
   const [showForm, setShowForm] = useState(false);
   const [editResource, setEditResource] = useState(null);
 
@@ -68,6 +64,16 @@ export default function Resources() {
     queryKey: ['resources'],
     queryFn: () => db.entities.Resource.list(),
   });
+
+  const { data: bookings = [] } = useQuery({
+    queryKey: ['bookings', 'resource-exp'],
+    queryFn: () => db.entities.Booking.list('-start_time', 2000),
+  });
+
+  const bookingCounts = useMemo(
+    () => buildResourceBookingCounts(bookings),
+    [bookings],
+  );
 
   const resourceTypes = useMemo(
     () => [...new Set(resources.map(r => r.resource_type).filter(Boolean))].sort(),
@@ -82,27 +88,37 @@ export default function Resources() {
     return counts;
   }, [resources]);
 
-  const activeCount = useMemo(
-    () => resources.filter(r => r.status === 'active').length,
-    [resources],
-  );
+  const statusCounts = useMemo(() => {
+    const counts = { all: resources.length, active: 0, maintenance: 0, inactive: 0 };
+    resources.forEach(r => {
+      if (counts[r.status] != null) counts[r.status] += 1;
+    });
+    return counts;
+  }, [resources]);
 
   const filtered = useMemo(() => resources.filter(r => {
-    const matchSearch = r.name?.toLowerCase().includes(search.toLowerCase()) ||
-      r.resource_type?.toLowerCase().includes(search.toLowerCase()) ||
-      r.location?.toLowerCase().includes(search.toLowerCase());
+    const q = search.toLowerCase().trim();
+    const matchSearch = !q
+      || r.name?.toLowerCase().includes(q)
+      || r.resource_type?.toLowerCase().includes(q)
+      || r.location?.toLowerCase().includes(q)
+      || r.pic_name?.toLowerCase().includes(q);
     const matchType = typeFilter === 'all' || r.resource_type === typeFilter;
-    return matchSearch && matchType;
-  }), [resources, search, typeFilter]);
+    const matchStatus = statusFilter === 'all' || r.status === statusFilter;
+    return matchSearch && matchType && matchStatus;
+  }), [resources, search, typeFilter, statusFilter]);
 
-  const hasActiveFilters = search.trim() !== '' || typeFilter !== 'all';
+  const hasActiveFilters = search.trim() !== '' || typeFilter !== 'all' || statusFilter !== 'all';
+  const canManage = hasPermission(user, 'manage_resources');
+  const isAdmin = user?.role === 'admin';
+  const isInternal = user?.user_type === 'internal';
 
   const openEdit = (r) => { setEditResource(r); setShowForm(true); };
   const openCreate = () => { setEditResource(null); setShowForm(true); };
-
   const clearFilters = () => {
     setSearch('');
     setTypeFilter('all');
+    setStatusFilter('all');
   };
 
   useEffect(() => {
@@ -110,157 +126,111 @@ export default function Resources() {
     if (q) setSearch(q);
   }, [searchParams]);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem(VIEW_STORAGE_KEY, viewMode);
-    } catch {
-      /* ignore storage errors */
-    }
-  }, [viewMode]);
-
-  const isAdmin = user?.role === 'admin';
-  const isInternal = user?.user_type === 'internal';
-  const effectiveViewMode = isMobile ? 'grid' : viewMode;
-
-  const gridClass = 'grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4';
-
   return (
-    <div className="space-y-6">
-      <PageHeader
-        icon={LayoutGrid}
-        title="Resources"
-        description="Browse and manage all bookable resources"
-        actions={
-          hasPermission(user, 'manage_resources') ? (
-            <Button onClick={openCreate} className="gap-2 w-full sm:w-auto shadow-md shadow-primary/20 hover:shadow-primary/30">
-              <Plus className="w-4 h-4" />
-              Add Resource
-            </Button>
-          ) : null
-        }
-      />
-
-      {!isLoading && resources.length > 0 && (
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-          <StatPill icon={Boxes} label="Total" value={resources.length} color="primary" />
-          <StatPill icon={CheckCircle2} label="Active" value={activeCount} color="success" />
-          <StatPill icon={Tag} label="Types" value={resourceTypes.length} color="accent" className="col-span-2 lg:col-span-1" />
+    <div className="space-y-5">
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-2.5">
+            <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <Boxes className="w-5 h-5" />
+            </span>
+            Resources
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1.5 ml-[3.25rem]">
+            {isLoading
+              ? 'Loading catalog…'
+              : `${filtered.length} resource${filtered.length !== 1 ? 's' : ''}${typeFilter !== 'all' ? ` · ${typeFilter}` : ''}`}
+          </p>
         </div>
-      )}
+        {canManage && (
+          <Button onClick={openCreate} className="gap-2 shadow-md shadow-primary/20 shrink-0">
+            <Plus className="w-4 h-4" />
+            Add Resource
+          </Button>
+        )}
+      </div>
 
-      <div className="space-y-3">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-          <Input
-            className="pl-9"
-            placeholder="Search by name, type, or location…"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
-        </div>
+      <div className="rounded-2xl border border-border bg-card p-3 sm:p-4 space-y-3 shadow-sm">
+        <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+          <div className="relative flex-1 min-w-0">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+            <Input
+              className="pl-9 h-10"
+              placeholder="Search name, type, location, or PIC…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+          </div>
 
-        {resourceTypes.length > 0 && (
-          <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <button
-              type="button"
-              onClick={() => setTypeFilter('all')}
-              className={cn(
-                'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors flex-shrink-0',
-                typeFilter === 'all'
-                  ? 'border-primary bg-primary text-primary-foreground'
-                  : 'border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted',
-              )}
-            >
-              All
-              <span className={cn(
-                'text-xs px-1.5 py-0.5 rounded-full',
-                typeFilter === 'all' ? 'bg-primary-foreground/20' : 'bg-muted',
-              )}
-              >
-                {resources.length}
-              </span>
-            </button>
-            {resourceTypes.map(t => (
+          <div className="flex items-center gap-1 rounded-xl bg-muted p-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {STATUS_FILTERS.map(({ key, label }) => (
               <button
-                key={t}
+                key={key}
                 type="button"
-                onClick={() => setTypeFilter(t)}
+                onClick={() => setStatusFilter(key)}
                 className={cn(
-                  'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors flex-shrink-0',
-                  typeFilter === t
-                    ? 'border-primary bg-primary text-primary-foreground'
-                    : 'border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted',
+                  'rounded-lg px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors',
+                  statusFilter === key
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground',
                 )}
               >
-                {t}
-                <span className={cn(
-                  'text-xs px-1.5 py-0.5 rounded-full',
-                  typeFilter === t ? 'bg-primary-foreground/20' : 'bg-muted',
-                )}
-                >
-                  {typeCounts[t] || 0}
-                </span>
+                {label}
+                <span className="ml-1 tabular-nums opacity-60">{statusCounts[key] ?? 0}</span>
               </button>
             ))}
           </div>
-        )}
 
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          {!isLoading && (
-            <div className="flex items-center gap-2 flex-wrap min-h-8">
-              <p className="text-sm text-muted-foreground">
-                {filtered.length} resource{filtered.length !== 1 ? 's' : ''}
-                {typeFilter !== 'all' ? ` in ${typeFilter}` : ''}
-              </p>
-              {hasActiveFilters && (
-                <Button variant="ghost" size="sm" className="h-7 px-2 text-xs gap-1" onClick={clearFilters}>
-                  <X className="w-3 h-3" />
-                  Clear filters
-                </Button>
-              )}
-            </div>
+          {hasActiveFilters && (
+            <Button variant="ghost" size="sm" className="h-9 gap-1 shrink-0" onClick={clearFilters}>
+              <X className="w-3.5 h-3.5" />
+              Clear
+            </Button>
           )}
+        </div>
 
-          <div className="hidden md:inline-flex h-9 w-auto items-center rounded-lg bg-muted p-1">
-            {VIEW_MODES.map(({ key, icon: Icon, label }) => (
-              <Button
-                key={key}
-                variant="ghost"
-                size="sm"
-                className={cn(
-                  'h-7 px-3 rounded-md gap-1.5',
-                  viewMode === key && 'bg-background shadow text-foreground',
-                )}
-                onClick={() => setViewMode(key)}
-                aria-pressed={viewMode === key}
-                aria-label={label}
-              >
-                <Icon className="w-4 h-4" />
-                <span>{label}</span>
-              </Button>
+        {resourceTypes.length > 0 && (
+          <div className="flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <TypeChip
+              active={typeFilter === 'all'}
+              label="All"
+              count={resources.length}
+              icon={Boxes}
+              onClick={() => setTypeFilter('all')}
+            />
+            {resourceTypes.map(t => (
+              <TypeChip
+                key={t}
+                active={typeFilter === t}
+                label={t}
+                count={typeCounts[t] || 0}
+                icon={getResourceTypeIcon(t)}
+                onClick={() => setTypeFilter(t)}
+              />
             ))}
           </div>
-        </div>
+        )}
       </div>
 
       {isLoading ? (
-        <div className={effectiveViewMode === 'grid' ? gridClass : 'space-y-3'}>
-          {Array.from({ length: effectiveViewMode === 'grid' ? 6 : 4 }).map((_, i) => (
-            <Skeleton
-              key={i}
-              className={effectiveViewMode === 'grid' ? 'h-72 rounded-2xl' : effectiveViewMode === 'list' ? 'h-32 md:h-28 rounded-2xl' : 'h-16 rounded-xl'}
-            />
+        <div className={GRID_CLASS}>
+          {Array.from({ length: 8 }).map((_, i) => (
+            <Skeleton key={i} className="h-[22rem] rounded-2xl" />
           ))}
         </div>
       ) : filtered.length === 0 ? (
         <EmptyState
-          icon={LayoutGrid}
+          icon={Boxes}
           title="No resources found"
-          description={hasActiveFilters ? 'Try adjusting your search or filters.' : 'No resources have been added yet.'}
+          description={
+            hasActiveFilters
+              ? 'Try adjusting your search or filters.'
+              : 'No resources have been added yet.'
+          }
           action={
             hasActiveFilters ? (
               <Button variant="outline" size="sm" onClick={clearFilters}>Clear filters</Button>
-            ) : hasPermission(user, 'manage_resources') ? (
+            ) : canManage ? (
               <Button size="sm" onClick={openCreate} className="gap-2">
                 <Plus className="w-4 h-4" />
                 Add Resource
@@ -268,25 +238,27 @@ export default function Resources() {
             ) : null
           }
         />
-      ) : effectiveViewMode === 'grid' ? (
+      ) : (
         <motion.div
-          className={gridClass}
+          className={GRID_CLASS}
           initial="hidden"
           animate="visible"
           variants={{
             hidden: { opacity: 0 },
-            visible: { opacity: 1, transition: { staggerChildren: 0.04 } },
+            visible: { opacity: 1, transition: { staggerChildren: 0.03 } },
           }}
         >
           {filtered.map(r => (
             <motion.div
               key={r.id}
-              variants={{ hidden: { opacity: 0, y: 12 }, visible: { opacity: 1, y: 0 } }}
+              variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }}
+              className="min-w-0"
             >
               <ResourceCard
                 resource={r}
                 isAdmin={isAdmin}
                 isInternal={isInternal}
+                bookingCount={bookingCounts[r.id] || 0}
                 onEdit={() => openEdit(r)}
                 onBook={openBookingModal}
                 view="grid"
@@ -294,34 +266,6 @@ export default function Resources() {
             </motion.div>
           ))}
         </motion.div>
-      ) : effectiveViewMode === 'list' ? (
-        <div className="space-y-3">
-          {filtered.map(r => (
-            <ResourceCard
-              key={r.id}
-              resource={r}
-              isAdmin={isAdmin}
-              isInternal={isInternal}
-              onEdit={() => openEdit(r)}
-              onBook={openBookingModal}
-              view="list"
-            />
-          ))}
-        </div>
-      ) : (
-        <div className="rounded-2xl border border-border overflow-hidden divide-y divide-border bg-card">
-          {filtered.map(r => (
-            <ResourceCard
-              key={r.id}
-              resource={r}
-              isAdmin={isAdmin}
-              isInternal={isInternal}
-              onEdit={() => openEdit(r)}
-              onBook={openBookingModal}
-              view="compact"
-            />
-          ))}
-        </div>
       )}
 
       <ResourceFormDialog open={showForm} onClose={() => setShowForm(false)} resource={editResource} user={user} />

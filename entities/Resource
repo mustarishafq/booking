@@ -10,6 +10,27 @@
       "type": "string",
       "description": "Type of resource (e.g. Room, Car, Boat, Service, Equipment...)"
     },
+    "pairing_role": {
+      "type": "string",
+      "enum": [
+        "none",
+        "vehicle",
+        "driver"
+      ],
+      "default": "none",
+      "description": "Deprecated — use pair_with_type"
+    },
+    "pair_with_type": {
+      "type": "string",
+      "description": "Deprecated — use pair_with_types"
+    },
+    "pair_with_types": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Resource types to optionally offer as companions when booking this resource (e.g. Driver, Car)"
+    },
     "description": {
       "type": "string"
     },
@@ -62,6 +83,10 @@
     "location": {
       "type": "string",
       "description": "Physical location or identifier"
+    },
+    "phone": {
+      "type": "string",
+      "description": "Contact phone number for this resource"
     },
     "odometer_km": {
       "type": "number",

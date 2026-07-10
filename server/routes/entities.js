@@ -17,7 +17,7 @@ import { writeAuditLog, slimRow, entitySummary } from '../audit.js';
 
 // Fields that are stored as JSON strings in MySQL
 const JSON_FIELDS = {
-  resources: ['amenities'],
+  resources: ['amenities', 'pair_with_types'],
   rooms:     ['amenities'],
 };
 

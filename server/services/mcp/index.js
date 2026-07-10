@@ -35,7 +35,7 @@ import {
 import { buildPaginationMeta } from '../../mcp/mcpResponse.js';
 
 const JSON_FIELDS = {
-  resources: ['amenities'],
+  resources: ['amenities', 'pair_with_types'],
   rooms: ['amenities'],
 };
 

@@ -79,6 +79,15 @@ export const bookingStatusBadge = {
   completed: 'text-primary bg-primary/10 border-primary/30',
 };
 
+const BOOKING_TERMINAL_STATUSES = new Set(['completed', 'cancelled', 'rejected']);
+
+/** Editable when not terminal and the booking end time has not passed. */
+export function isBookingEditable(booking, now = new Date()) {
+  if (!booking) return false;
+  if (BOOKING_TERMINAL_STATUSES.has(booking.status)) return false;
+  return new Date(booking.end_time) >= now;
+}
+
 export const bookingStatusSolid = {
   confirmed: 'bg-success text-success-foreground',
   pending: 'bg-warning text-warning-foreground',
@@ -92,6 +101,105 @@ export const resourceStatusBadge = {
   maintenance: 'text-warning bg-warning/10 border-warning/30',
   inactive: 'text-destructive bg-destructive/10 border-destructive/30',
 };
+
+export function getPairWithTypes(resource) {
+  const raw = resource?.pair_with_types;
+  if (Array.isArray(raw)) {
+    return raw.map(t => String(t).trim()).filter(Boolean);
+  }
+  // Legacy single value
+  const legacy = resource?.pair_with_type;
+  if (typeof legacy === 'string' && legacy.trim()) return [legacy.trim()];
+  return [];
+}
+
+/** @deprecated use getPairWithTypes */
+export function getPairWithType(resource) {
+  return getPairWithTypes(resource)[0] || '';
+}
+
+export function filterByResourceTypes(resources, types) {
+  const targets = new Set(
+    (Array.isArray(types) ? types : [types])
+      .map(t => String(t || '').trim().toLowerCase())
+      .filter(Boolean),
+  );
+  if (targets.size === 0) return [];
+  return resources.filter(r => targets.has((r.resource_type || '').trim().toLowerCase()));
+}
+
+/** @deprecated use filterByResourceTypes */
+export function filterByResourceType(resources, type) {
+  return filterByResourceTypes(resources, type);
+}
+
+export function findPairedSibling(booking, bookings = []) {
+  if (!booking?.booking_group_id) return null;
+  return bookings.find(
+    b => b.booking_group_id === booking.booking_group_id && b.id !== booking.id,
+  ) || null;
+}
+
+/** Prefer vehicle/room as primary; driver as companion when ordering a pair. */
+function orderPairedBookings(a, b) {
+  const aDriver = /\bdriver\b/i.test(a?.resource_type || '');
+  const bDriver = /\bdriver\b/i.test(b?.resource_type || '');
+  if (aDriver && !bDriver) return [b, a];
+  if (!aDriver && bDriver) return [a, b];
+  return String(a?.id || '').localeCompare(String(b?.id || '')) <= 0 ? [a, b] : [b, a];
+}
+
+/**
+ * Collapse bookings that share booking_group_id into one visual event.
+ * Returns booking-like objects with `pairedSibling` + `isPairedEvent` when paired.
+ */
+export function collapsePairedBookings(bookings = []) {
+  const seen = new Set();
+  const result = [];
+
+  for (const booking of bookings) {
+    if (!booking?.id || seen.has(booking.id)) continue;
+
+    const sibling = findPairedSibling(booking, bookings);
+    if (sibling) {
+      seen.add(booking.id);
+      seen.add(sibling.id);
+      const [primary, secondary] = orderPairedBookings(booking, sibling);
+      result.push({
+        ...primary,
+        pairedSibling: secondary,
+        isPairedEvent: true,
+      });
+      continue;
+    }
+
+    seen.add(booking.id);
+    result.push(booking);
+  }
+
+  return result;
+}
+
+/** Display label for a (possibly paired) calendar event's resources. */
+export function getPairedResourceLabel(booking) {
+  const primary = booking?.resource_name || booking?.room_name || '';
+  const secondary = booking?.pairedSibling?.resource_name || booking?.pairedSibling?.room_name || '';
+  if (primary && secondary) return `${primary} + ${secondary}`;
+  return primary || secondary || '';
+}
+
+export function phoneTelHref(phone) {
+  const digits = String(phone || '').replace(/[^\d+]/g, '');
+  return digits ? `tel:${digits}` : null;
+}
+
+/** Prefer snapshotted booking phone; fall back to current resource phone. */
+export function getBookingPhone(booking, resources = []) {
+  if (booking?.resource_phone) return booking.resource_phone;
+  if (!booking?.resource_id || !resources?.length) return null;
+  const resource = resources.find(r => r.id === booking.resource_id);
+  return resource?.phone || null;
+}
 
 export const statColorMap = {
   primary: 'bg-primary/10 text-primary',

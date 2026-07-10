@@ -2,6 +2,7 @@ import { db } from '@/api/base44Client';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useLocation } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { Home, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -23,7 +24,12 @@ export default function PageNotFound() {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-6 bg-background">
-      <div className="max-w-md w-full text-center space-y-6">
+      <motion.div
+        className="max-w-md w-full text-center space-y-6"
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+      >
         <div className="space-y-2">
           <h1 className="text-7xl font-bold tracking-tight text-muted-foreground/30">404</h1>
           <div className="h-0.5 w-16 bg-border mx-auto" />
@@ -56,7 +62,7 @@ export default function PageNotFound() {
             Go Home
           </Link>
         </Button>
-      </div>
+      </motion.div>
     </div>
   );
 }

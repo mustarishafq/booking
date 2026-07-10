@@ -1,11 +1,13 @@
 import { useMemo } from 'react';
 import { format, isToday } from 'date-fns';
-import { ChevronLeft, ChevronRight, Clock, Calendar, MapPin, User } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Clock, Calendar, MapPin, User, Phone, Pencil, Link2 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import EmptyState from '@/components/ui/EmptyState';
-import { bookingStatusSolid, bookingStatusBadge } from '@/lib/bookingUtils';
+import {
+  bookingStatusSolid, bookingStatusBadge, getBookingPhone, phoneTelHref, isBookingEditable,
+} from '@/lib/bookingUtils';
 import {
   getTimelineHours,
   getBookingTimelinePosition,
@@ -13,6 +15,7 @@ import {
   navigateDay,
   getCalendarBookingTitle,
   canViewCalendarBookingDetails,
+  isOwnBooking,
   TIMELINE_START_HOUR,
   TIMELINE_END_HOUR,
 } from '@/lib/calendarUtils';
@@ -242,12 +245,19 @@ export function CalendarDayDetailContent({
   canManage,
   onApprove,
   onReject,
+  onEdit,
   user,
   canViewAll = false,
+  resources = [],
 }) {
-  const displayBookings = selectedBooking
-    ? [selectedBooking, ...bookings.filter(b => b.id !== selectedBooking.id)]
-    : bookings;
+  const displayBookings = (() => {
+    if (!selectedBooking) return bookings;
+    const match = bookings.find(
+      b => b.id === selectedBooking.id || b.pairedSibling?.id === selectedBooking.id,
+    );
+    if (match) return [match, ...bookings.filter(b => b.id !== match.id)];
+    return [selectedBooking, ...bookings.filter(b => b.id !== selectedBooking.id)];
+  })();
 
   if (!date) {
     return <p className="text-sm text-muted-foreground">Select a day to see its bookings</p>;
@@ -267,9 +277,25 @@ export function CalendarDayDetailContent({
   return (
     <div className="space-y-2.5 sm:space-y-3">
       {displayBookings.map(b => {
-        const isSelected = selectedBooking?.id === b.id;
+        const isSelected = selectedBooking?.id === b.id
+          || (b.isPairedEvent && selectedBooking?.id === b.pairedSibling?.id);
         const showDetails = canViewCalendarBookingDetails(b, user, canViewAll);
         const title = getCalendarBookingTitle(b, user, canViewAll);
+        const primaryPhone = getBookingPhone(b, resources);
+        const siblingPhone = b.isPairedEvent
+          ? getBookingPhone(b.pairedSibling, resources)
+          : null;
+        const primaryCallHref = phoneTelHref(primaryPhone);
+        const siblingCallHref = phoneTelHref(siblingPhone);
+        const canEdit = isSelected
+          && onEdit
+          && isBookingEditable(b)
+          && (canManage || isOwnBooking(b, user));
+        const showPending = canManage && b.status === 'pending' && isSelected;
+        const showActions = primaryCallHref || siblingCallHref || showPending || canEdit;
+        const primaryName = b.resource_name || b.room_name;
+        const siblingName = b.pairedSibling?.resource_name || b.pairedSibling?.room_name;
+
         return (
           <button
             key={b.id}
@@ -280,19 +306,52 @@ export function CalendarDayDetailContent({
               isSelected
                 ? 'bg-primary/5 border-primary/30 ring-1 ring-primary/20'
                 : 'bg-card border-border hover:border-primary/20 hover:shadow-sm',
+              b.isPairedEvent && !isSelected && 'border-primary/15',
             )}
           >
             <div className="flex items-start justify-between gap-2">
-              <p className="text-sm font-semibold leading-snug line-clamp-2">{title}</p>
+              <div className="min-w-0 space-y-1">
+                <p className="text-sm font-semibold leading-snug line-clamp-2">{title}</p>
+                {b.isPairedEvent && (
+                  <Badge
+                    variant="outline"
+                    className="h-5 gap-1 text-[10px] border-primary/30 text-primary bg-primary/5"
+                  >
+                    <Link2 className="w-3 h-3" />
+                    Paired
+                  </Badge>
+                )}
+              </div>
               <Badge variant="outline" className={cn('shrink-0 capitalize text-[10px] sm:text-xs border-0', bookingStatusBadge[b.status])}>
                 {b.status}
               </Badge>
             </div>
 
-            {(b.resource_name || b.room_name) && (
+            {b.isPairedEvent && (primaryName || siblingName) ? (
+              <div className="rounded-lg bg-muted/50 border border-border/60 p-2 space-y-1.5">
+                {primaryName && (
+                  <div className="flex items-center gap-1.5 text-xs text-foreground">
+                    <MapPin className="w-3 h-3 shrink-0 text-muted-foreground" />
+                    <span className="truncate font-medium">{primaryName}</span>
+                    {b.resource_type && (
+                      <span className="text-muted-foreground truncate">· {b.resource_type}</span>
+                    )}
+                  </div>
+                )}
+                {siblingName && (
+                  <div className="flex items-center gap-1.5 text-xs text-foreground">
+                    <Link2 className="w-3 h-3 shrink-0 text-primary" />
+                    <span className="truncate font-medium">{siblingName}</span>
+                    {b.pairedSibling?.resource_type && (
+                      <span className="text-muted-foreground truncate">· {b.pairedSibling.resource_type}</span>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (primaryName) && (
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <MapPin className="w-3 h-3 shrink-0" />
-                <span className="truncate">{b.resource_name || b.room_name}</span>
+                <span className="truncate">{primaryName}</span>
               </div>
             )}
 
@@ -310,24 +369,67 @@ export function CalendarDayDetailContent({
               </div>
             )}
 
-            {canManage && b.status === 'pending' && isSelected && (
-              <div className="flex gap-2 pt-1 border-t border-border/60">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-8 text-xs text-success border-success/30 hover:bg-success/10 hover:text-success flex-1"
-                  onClick={(e) => { e.stopPropagation(); onApprove(b); }}
-                >
-                  Approve
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-8 text-xs text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive flex-1"
-                  onClick={(e) => { e.stopPropagation(); onReject(b); }}
-                >
-                  Reject
-                </Button>
+            {showActions && (
+              <div className="flex flex-wrap gap-2 pt-1 border-t border-border/60">
+                {primaryCallHref && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 text-xs flex-1"
+                    asChild
+                  >
+                    <a href={primaryCallHref} onClick={(e) => e.stopPropagation()}>
+                      <Phone className="w-3.5 h-3.5 mr-1.5" />
+                      {b.isPairedEvent && siblingCallHref
+                        ? `Call ${primaryName || 'resource'}`
+                        : 'Call'}
+                    </a>
+                  </Button>
+                )}
+                {siblingCallHref && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 text-xs flex-1"
+                    asChild
+                  >
+                    <a href={siblingCallHref} onClick={(e) => e.stopPropagation()}>
+                      <Phone className="w-3.5 h-3.5 mr-1.5" />
+                      Call {siblingName || 'pair'}
+                    </a>
+                  </Button>
+                )}
+                {canEdit && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 text-xs flex-1"
+                    onClick={(e) => { e.stopPropagation(); onEdit(b); }}
+                  >
+                    <Pencil className="w-3.5 h-3.5 mr-1.5" />
+                    Edit
+                  </Button>
+                )}
+                {showPending && (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 text-xs text-success border-success/30 hover:bg-success/10 hover:text-success flex-1"
+                      onClick={(e) => { e.stopPropagation(); onApprove(b); }}
+                    >
+                      Approve
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 text-xs text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive flex-1"
+                      onClick={(e) => { e.stopPropagation(); onReject(b); }}
+                    >
+                      Reject
+                    </Button>
+                  </>
+                )}
               </div>
             )}
           </button>
@@ -345,8 +447,10 @@ export function CalendarDayDetail({
   canManage,
   onApprove,
   onReject,
+  onEdit,
   user,
   canViewAll = false,
+  resources = [],
   className,
 }) {
   return (
@@ -377,8 +481,10 @@ export function CalendarDayDetail({
             canManage={canManage}
             onApprove={onApprove}
             onReject={onReject}
+            onEdit={onEdit}
             user={user}
             canViewAll={canViewAll}
+            resources={resources}
           />
         </div>
       </CardContent>

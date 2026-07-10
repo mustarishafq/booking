@@ -61,6 +61,9 @@ CREATE TABLE IF NOT EXISTS resources (
   id            CHAR(36)     NOT NULL,
   name          VARCHAR(255) NOT NULL,
   resource_type VARCHAR(255) NOT NULL,
+  pairing_role  ENUM('none','vehicle','driver') NOT NULL DEFAULT 'none',
+  pair_with_type VARCHAR(255) DEFAULT NULL,
+  pair_with_types JSON DEFAULT NULL,
   description   TEXT,
   capacity      INT,
   pricing_model ENUM('hourly','daily','flat') NOT NULL DEFAULT 'hourly',
@@ -71,6 +74,7 @@ CREATE TABLE IF NOT EXISTS resources (
   pic_user_id         CHAR(36)     DEFAULT NULL,
   status              ENUM('active','maintenance','inactive') NOT NULL DEFAULT 'active',
   location      VARCHAR(255),
+  phone         VARCHAR(50) DEFAULT NULL,
   odometer_km   DECIMAL(12,2) DEFAULT NULL,
   created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -188,6 +192,7 @@ CREATE TABLE IF NOT EXISTS bookings (
   resource_id         VARCHAR(255) NOT NULL,
   resource_name       VARCHAR(255),
   resource_type       VARCHAR(255),
+  resource_phone      VARCHAR(50) DEFAULT NULL,
   pricing_model       ENUM('hourly','daily','flat'),
   title               VARCHAR(255) NOT NULL,
   start_time          DATETIME     NOT NULL,
@@ -199,6 +204,7 @@ CREATE TABLE IF NOT EXISTS bookings (
   is_recurring        TINYINT(1)   NOT NULL DEFAULT 0,
   recurrence_group_id CHAR(36),
   recurrence_weeks    INT,
+  booking_group_id    CHAR(36),
   booked_by_email     VARCHAR(255),
   booked_by_name      VARCHAR(255),
   created_at          DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -206,7 +212,8 @@ CREATE TABLE IF NOT EXISTS bookings (
   PRIMARY KEY (id),
   INDEX idx_bookings_resource_id (resource_id),
   INDEX idx_bookings_start_time  (start_time),
-  INDEX idx_bookings_status      (status)
+  INDEX idx_bookings_status      (status),
+  INDEX idx_bookings_booking_group_id (booking_group_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ------------------------------------------------------------------

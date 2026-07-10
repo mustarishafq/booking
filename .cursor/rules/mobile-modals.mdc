@@ -1,0 +1,22 @@
+---
+description: Modal dialogs must keep side margins on mobile — never full-bleed width
+alwaysApply: true
+---
+
+# Mobile modal width
+
+Never make dialog/modal forms full-width on mobile. Always leave horizontal inset so the overlay shows around the card.
+
+## Required pattern
+
+- Prefer the shared `DialogContent` default: `w-[calc(100%-2rem)]` (already in `src/components/ui/dialog.jsx`).
+- When overriding `DialogContent` className, **keep** `w-[calc(100%-2rem)]` (or equivalent inset). Do not use bare `w-full` without side margin.
+- Keep rounded corners on mobile (`rounded-2xl` / `rounded-xl`), not square edge-to-edge sheets unless explicitly requested.
+
+```jsx
+// ✅ GOOD
+<DialogContent className="w-[calc(100%-2rem)] max-w-lg sm:max-w-2xl ...">
+
+// ❌ BAD — edge-to-edge on small screens
+<DialogContent className="w-full max-w-lg ...">
+```
