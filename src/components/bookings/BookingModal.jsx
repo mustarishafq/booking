@@ -2,11 +2,11 @@ import { db } from '@/api/base44Client';
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { addWeeks } from 'date-fns';
+import { addWeeks, format } from 'date-fns';
 import { toast } from 'sonner';
 import {
   Loader2, CalendarPlus, Pencil, Check, Search, Tag, ChevronLeft, ChevronRight, Link2, Zap,
-  Phone, UserRound,
+  Phone, UserRound, Clock,
 } from 'lucide-react';
 
 import {
@@ -40,6 +40,8 @@ import {
   findPairedSibling,
   isBookingEditable,
   phoneTelHref,
+  getBusyRange,
+  formatBusyRangeLabel,
 } from '@/lib/bookingUtils';
 import { buildResourceBookingCounts, getResourceExp } from '@/lib/resourceVisuals';
 
@@ -55,20 +57,31 @@ const emptyForm = {
   recurrence_weeks: 4,
 };
 
-function ResourcePickCard({ resource, selected, onSelect, isInternal, bookingCount = 0 }) {
+const STEP_LABELS = {
+  datetime: 'Date & Time',
+  resource: 'Resource',
+  details: 'Details',
+  summary: 'Summary',
+};
+
+function ResourcePickCard({ resource, selected, onSelect, isInternal, bookingCount = 0, availability = null }) {
   const pairWithTypes = getPairWithTypes(resource);
   const { exp, level, bookingCount: count } = getResourceExp(bookingCount);
+  const isUnavailable = availability?.available === false;
 
   return (
     <button
       type="button"
-      onClick={() => onSelect(resource.id)}
+      onClick={() => { if (!isUnavailable) onSelect(resource.id); }}
+      disabled={isUnavailable}
       className={cn(
         'text-left rounded-xl border overflow-hidden transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         'flex flex-row sm:flex-col',
-        selected
-          ? 'border-primary ring-2 ring-primary/30 shadow-md shadow-primary/10'
-          : 'border-border hover:border-primary/40 hover:shadow-sm',
+        isUnavailable
+          ? 'border-border opacity-60 cursor-not-allowed'
+          : selected
+            ? 'border-primary ring-2 ring-primary/30 shadow-md shadow-primary/10'
+            : 'border-border hover:border-primary/40 hover:shadow-sm',
       )}
     >
       <div className="relative w-20 h-20 sm:w-full sm:h-auto sm:aspect-[4/3] shrink-0 bg-muted overflow-hidden">
@@ -79,13 +92,24 @@ function ResourcePickCard({ resource, selected, onSelect, isInternal, bookingCou
             <Tag className="w-6 h-6 sm:w-8 sm:h-8 text-muted-foreground/30" />
           </div>
         )}
-        {selected && (
+        {selected && !isUnavailable && (
           <div className="absolute top-1.5 right-1.5 sm:top-2 sm:right-2 w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow z-10">
             <Check className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
           </div>
         )}
-        <div className="absolute top-1.5 left-1.5 sm:top-2 sm:left-2 flex flex-col items-start gap-1 max-w-[75%] pointer-events-none">
-          <Badge className="bg-primary/90 text-primary-foreground text-[10px] max-w-full truncate hidden sm:inline-flex">
+        {isUnavailable && (
+          <div className="hidden sm:block absolute top-1.5 right-1.5 sm:top-2 sm:right-2 z-10">
+            <Badge
+              variant="outline"
+              className="gap-1 text-[10px] px-1.5 border-destructive/30 bg-destructive/90 text-destructive-foreground"
+            >
+              <Clock className="w-2.5 h-2.5" />
+              Busy
+            </Badge>
+          </div>
+        )}
+        <div className="hidden sm:flex absolute top-1.5 left-1.5 sm:top-2 sm:left-2 flex-col items-start gap-1 max-w-[75%] pointer-events-none">
+          <Badge className="bg-primary/90 text-primary-foreground text-[10px] max-w-full truncate">
             {resource.resource_type}
           </Badge>
           <Badge
@@ -99,7 +123,7 @@ function ResourcePickCard({ resource, selected, onSelect, isInternal, bookingCou
           >
             <Zap className="w-2.5 h-2.5 fill-amber-300 text-amber-300" />
             <span className="tabular-nums">{exp} XP</span>
-            <span className="opacity-80 hidden sm:inline">· Lv.{level}</span>
+            <span className="opacity-80">· Lv.{level}</span>
           </Badge>
         </div>
       </div>
@@ -126,6 +150,12 @@ function ResourcePickCard({ resource, selected, onSelect, isInternal, bookingCou
             </span>
           )}
         </div>
+        {isUnavailable && (
+          <p className="text-[11px] text-destructive font-medium flex items-center gap-1">
+            <Clock className="w-3 h-3 shrink-0" />
+            {formatBusyRangeLabel(availability.busyRange)}
+          </p>
+        )}
       </div>
     </button>
   );
@@ -212,7 +242,7 @@ export default function BookingModal({
   const [saving, setSaving] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [selectedDuration, setSelectedDuration] = useState(null);
-  const [step, setStep] = useState(1);
+  const [stepIndex, setStepIndex] = useState(0);
   const [resourceSearch, setResourceSearch] = useState('');
   const [companionSearch, setCompanionSearch] = useState('');
 
@@ -267,24 +297,19 @@ export default function BookingModal({
         recurrence_weeks: 4,
       });
       setSelectedDuration(matchDurationPreset(getDurationMinutes(startTime, endTime)));
-      setStep(3);
       return;
     }
 
-    const startTime = preselectedStartTime || '';
-    const endTime = preselectedEndTime || '';
+    const startTime = preselectedStartTime || defaultBookingStartTime();
+    const endTime = preselectedEndTime || addMinutesToDateTimeLocal(startTime, 60);
     setForm({
       ...emptyForm,
       resource_id: preselectedResourceId || '',
       start_time: startTime,
       end_time: endTime,
     });
-    setSelectedDuration(
-      startTime && endTime
-        ? matchDurationPreset(getDurationMinutes(startTime, endTime))
-        : null,
-    );
-    setStep(1);
+    setSelectedDuration(matchDurationPreset(getDurationMinutes(startTime, endTime)));
+    setStepIndex(0);
   }, [open, booking?.id, preselectedResourceId, preselectedStartTime, preselectedEndTime]);
 
   useEffect(() => {
@@ -360,12 +385,17 @@ export default function BookingModal({
       ? 'Companion'
       : '';
 
-  const stepLabels = needsCompanionStep
-    ? ['Resource', companionStepLabel, 'Details']
-    : ['Resource', 'Details'];
+  const steps = useMemo(
+    () => (needsCompanionStep
+      ? ['datetime', 'resource', 'companion', 'details', 'summary']
+      : ['datetime', 'resource', 'details', 'summary']),
+    [needsCompanionStep],
+  );
+  const currentStep = steps[Math.min(stepIndex, steps.length - 1)];
+  const stepLabels = steps.map(s => (s === 'companion' ? (companionStepLabel || 'Companion') : STEP_LABELS[s]));
+  const currentStepNumber = Math.min(stepIndex, steps.length - 1) + 1;
+  const totalSteps = steps.length;
 
-  const visualStep = isEdit ? 1 : (!needsCompanionStep && step === 3 ? 2 : step);
-  const totalVisualSteps = isEdit ? 1 : stepLabels.length;
   const displayResourceName = selected?.name || booking?.resource_name || '';
   const displayResourceType = selected?.resource_type || booking?.resource_type || '';
   const displayCompanionName = companion?.name || pairedSibling?.resource_name || '';
@@ -379,37 +409,6 @@ export default function BookingModal({
       ? resources.find(r => r.id === pairedSibling.resource_id)?.requires_approval !== false
       : false);
 
-  const filteredResources = useMemo(() => {
-    const q = resourceSearch.trim().toLowerCase();
-    if (!q) return activeResources;
-    return activeResources.filter(r =>
-      (r.name || '').toLowerCase().includes(q)
-      || (r.resource_type || '').toLowerCase().includes(q)
-      || (r.location || '').toLowerCase().includes(q),
-    );
-  }, [activeResources, resourceSearch]);
-
-  const companionOptions = useMemo(() => {
-    if (pairWithTypes.length === 0) return [];
-    return filterByResourceTypes(activeResources, pairWithTypes)
-      .filter(r => r.id !== form.resource_id);
-  }, [activeResources, pairWithTypes, form.resource_id]);
-
-  const filteredCompanions = useMemo(() => {
-    const q = companionSearch.trim().toLowerCase();
-    if (!q) return companionOptions;
-    return companionOptions.filter(r =>
-      (r.name || '').toLowerCase().includes(q)
-      || (r.resource_type || '').toLowerCase().includes(q)
-      || (r.location || '').toLowerCase().includes(q),
-    );
-  }, [companionOptions, companionSearch]);
-
-  const primaryCost = calcBookingCost(selected, form.start_time, form.end_time);
-  const companionCost = calcBookingCost(companion, form.start_time, form.end_time);
-  const singleCost = primaryCost + companionCost;
-  const totalCost = form.is_recurring ? singleCost * Number(form.recurrence_weeks) : singleCost;
-
   const checkConflict = (start, end, resourceId, excludeIds = []) => {
     const excluded = new Set(excludeIds.filter(Boolean));
     return bookings.some(b =>
@@ -422,6 +421,91 @@ export default function BookingModal({
     );
   };
 
+  const hasTimeRange = !!(form.start_time && form.end_time && new Date(form.end_time) > new Date(form.start_time));
+  const formattedRange = hasTimeRange
+    ? `${format(new Date(form.start_time), 'MMM d, h:mm a')} – ${format(new Date(form.end_time), 'h:mm a')}`
+    : '';
+
+  const availabilityExcludeIds = useMemo(
+    () => (isEdit ? [booking?.id, pairedSibling?.id].filter(Boolean) : []),
+    [isEdit, booking?.id, pairedSibling?.id],
+  );
+
+  const resourceAvailability = useMemo(() => {
+    if (!hasTimeRange) return {};
+    const map = {};
+    for (const r of activeResources) {
+      if (checkConflict(form.start_time, form.end_time, r.id, availabilityExcludeIds)) {
+        map[r.id] = {
+          available: false,
+          busyRange: getBusyRange(r.id, form.start_time, form.end_time, bookings, availabilityExcludeIds),
+        };
+      } else {
+        map[r.id] = { available: true };
+      }
+    }
+    return map;
+  }, [hasTimeRange, activeResources, form.start_time, form.end_time, bookings, availabilityExcludeIds]);
+
+  const resourceTypeSummary = useMemo(() => {
+    const map = new Map();
+    for (const r of activeResources) {
+      const type = r.resource_type || 'Other';
+      if (!map.has(type)) map.set(type, { type, total: 0, available: 0 });
+      const entry = map.get(type);
+      entry.total += 1;
+      if (!hasTimeRange || resourceAvailability[r.id]?.available !== false) entry.available += 1;
+    }
+    return [...map.values()].sort((a, b) => a.type.localeCompare(b.type));
+  }, [activeResources, hasTimeRange, resourceAvailability]);
+
+  const filteredResources = useMemo(() => {
+    const q = resourceSearch.trim().toLowerCase();
+    const list = !q
+      ? activeResources
+      : activeResources.filter(r =>
+        (r.name || '').toLowerCase().includes(q)
+        || (r.resource_type || '').toLowerCase().includes(q)
+        || (r.location || '').toLowerCase().includes(q),
+      );
+
+    if (!hasTimeRange) return list;
+    return [...list].sort((a, b) => {
+      const aAvailable = resourceAvailability[a.id]?.available !== false;
+      const bAvailable = resourceAvailability[b.id]?.available !== false;
+      return aAvailable === bAvailable ? 0 : (aAvailable ? -1 : 1);
+    });
+  }, [activeResources, resourceSearch, hasTimeRange, resourceAvailability]);
+
+  const companionOptions = useMemo(() => {
+    if (pairWithTypes.length === 0) return [];
+    return filterByResourceTypes(activeResources, pairWithTypes)
+      .filter(r => r.id !== form.resource_id);
+  }, [activeResources, pairWithTypes, form.resource_id]);
+
+  const filteredCompanions = useMemo(() => {
+    const q = companionSearch.trim().toLowerCase();
+    const list = !q
+      ? companionOptions
+      : companionOptions.filter(r =>
+        (r.name || '').toLowerCase().includes(q)
+        || (r.resource_type || '').toLowerCase().includes(q)
+        || (r.location || '').toLowerCase().includes(q),
+      );
+
+    if (!hasTimeRange) return list;
+    return [...list].sort((a, b) => {
+      const aAvailable = resourceAvailability[a.id]?.available !== false;
+      const bAvailable = resourceAvailability[b.id]?.available !== false;
+      return aAvailable === bAvailable ? 0 : (aAvailable ? -1 : 1);
+    });
+  }, [companionOptions, companionSearch, hasTimeRange, resourceAvailability]);
+
+  const primaryCost = calcBookingCost(selected, form.start_time, form.end_time);
+  const companionCost = calcBookingCost(companion, form.start_time, form.end_time);
+  const singleCost = primaryCost + companionCost;
+  const totalCost = form.is_recurring ? singleCost * Number(form.recurrence_weeks) : singleCost;
+
   const selectPrimaryResource = (id) => {
     setForm(f => ({
       ...f,
@@ -430,26 +514,19 @@ export default function BookingModal({
     }));
   };
 
-  const goNext = () => {
-    if (step === 1) {
-      if (!form.resource_id) {
-        toast.error('Please select a resource.');
-        return;
-      }
-      setStep(needsCompanionStep ? 2 : 3);
-      return;
-    }
-    if (step === 2) {
-      setStep(3);
-    }
-  };
+  const continueDisabled = currentStep === 'datetime'
+    ? !hasTimeRange
+    : currentStep === 'resource'
+      ? !form.resource_id || (hasTimeRange && resourceAvailability[form.resource_id]?.available === false)
+      : currentStep === 'details'
+        ? !form.title.trim()
+        : false;
 
-  const goBack = () => {
-    if (step === 3) {
-      setStep(needsCompanionStep ? 2 : 1);
-      return;
-    }
-    if (step === 2) setStep(1);
+  const goNext = () => setStepIndex(i => Math.min(steps.length - 1, i + 1));
+  const goBack = () => setStepIndex(i => Math.max(0, i - 1));
+  const jumpToStep = (key) => {
+    const idx = steps.indexOf(key);
+    if (idx >= 0) setStepIndex(idx);
   };
 
   const handleBook = async () => {
@@ -669,6 +746,94 @@ export default function BookingModal({
       ? 'Submit this booking request for admin approval?'
       : 'Confirm and create this booking?');
 
+  const resourceSummaryCards = (
+    <div className="flex flex-col gap-2">
+      <div className={cn('grid gap-2', (companion || pairedSibling) ? 'grid-cols-2' : 'grid-cols-1')}>
+        {(selected || booking) && (
+          <div className="rounded-lg border border-border px-2.5 py-1.5 text-sm min-w-0 space-y-1.5">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="w-8 h-8 rounded-md overflow-hidden bg-muted shrink-0">
+                {selected?.image_url ? (
+                  <img src={selected.image_url} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <Tag className="w-3.5 h-3.5 text-muted-foreground/40" />
+                  </div>
+                )}
+              </div>
+              <div className="min-w-0">
+                <p className="font-medium truncate leading-tight">{displayResourceName}</p>
+                <p className="text-[11px] text-muted-foreground truncate">{displayResourceType}</p>
+              </div>
+            </div>
+            <ResourcePicContact resource={selected} />
+          </div>
+        )}
+        {(companion || pairedSibling) && (
+          <div className="rounded-lg border border-primary/30 bg-primary/5 px-2.5 py-1.5 text-sm min-w-0 space-y-1.5">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="w-8 h-8 rounded-md overflow-hidden bg-muted shrink-0">
+                {companion?.image_url ? (
+                  <img src={companion.image_url} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <Tag className="w-3.5 h-3.5 text-muted-foreground/40" />
+                  </div>
+                )}
+              </div>
+              <div className="min-w-0">
+                <p className="font-medium truncate leading-tight">{displayCompanionName}</p>
+                <p className="text-[11px] text-muted-foreground truncate">Paired · {displayCompanionType}</p>
+              </div>
+            </div>
+            <ResourcePicContact resource={companion} />
+          </div>
+        )}
+      </div>
+      {willNeedApproval && (
+        <Badge variant="outline" className="border-warning/30 text-warning bg-warning/10 h-fit w-fit">
+          {isEdit ? 'Changes require approval' : 'Requires approval'}
+        </Badge>
+      )}
+    </div>
+  );
+
+  const costSummary = singleCost > 0 && user?.user_type !== 'internal' && (
+    <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-2 text-sm">
+      <h3 className="font-semibold">Cost Summary</h3>
+      {selected && primaryCost > 0 && (
+        <div className="flex justify-between gap-2">
+          <span className="text-muted-foreground truncate">
+            {selected.name} · {bookingDurationLabel(selected, form.start_time, form.end_time)} × RM{selected.rate}
+          </span>
+          <span className="shrink-0">RM{(primaryCost / 100).toFixed(2)}</span>
+        </div>
+      )}
+      {companion && companionCost > 0 && (
+        <div className="flex justify-between gap-2">
+          <span className="text-muted-foreground truncate">
+            {companion.name} · {bookingDurationLabel(companion, form.start_time, form.end_time)} × RM{companion.rate}
+          </span>
+          <span className="shrink-0">RM{(companionCost / 100).toFixed(2)}</span>
+        </div>
+      )}
+      {form.is_recurring && (
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">× {form.recurrence_weeks} weeks</span>
+          <span>RM{(totalCost / 100).toFixed(2)}</span>
+        </div>
+      )}
+      <div className="border-t pt-2 flex justify-between font-semibold">
+        <span>Total</span>
+        <span className="text-primary">RM{(totalCost / 100).toFixed(2)}</span>
+      </div>
+      <div className="flex justify-between text-muted-foreground">
+        <span>Your balance</span>
+        <span>RM{((user?.credit_balance_cents || 0) / 100).toFixed(2)}</span>
+      </div>
+    </div>
+  );
+
   return (
     <>
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -685,145 +850,24 @@ export default function BookingModal({
               'Update details for this upcoming booking'
             ) : (
               <>
-                Step {visualStep} of {totalVisualSteps}
-                {step === 1 && ' — choose a resource'}
-                {step === 2 && (pairWithTypes.length === 1
+                Step {currentStepNumber} of {totalSteps}
+                {currentStep === 'datetime' && ' — choose date & time'}
+                {currentStep === 'resource' && ' — choose a resource'}
+                {currentStep === 'companion' && (pairWithTypes.length === 1
                   ? ` — optionally add a ${pairWithTypes[0]}`
                   : ' — optionally add a companion')}
-                {step === 3 && ' — booking details'}
+                {currentStep === 'details' && ' — booking details'}
+                {currentStep === 'summary' && ' — review & confirm'}
               </>
             )}
           </DialogDescription>
-          {!isEdit && <StepIndicator steps={stepLabels} current={visualStep} />}
+          {!isEdit && <StepIndicator steps={stepLabels} current={currentStepNumber} />}
         </DialogHeader>
 
         <div className="px-4 sm:px-6 py-4 sm:py-5 space-y-4 flex-1 min-h-0 overflow-y-auto">
-          {step === 1 && (
-            <div className="space-y-3">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  value={resourceSearch}
-                  onChange={e => setResourceSearch(e.target.value)}
-                  placeholder="Search resources…"
-                  className="pl-9"
-                />
-              </div>
-              {filteredResources.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-6">No active resources found.</p>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
-                  {filteredResources.map(r => (
-                    <ResourcePickCard
-                      key={r.id}
-                      resource={r}
-                      selected={form.resource_id === r.id}
-                      onSelect={selectPrimaryResource}
-                      isInternal={isInternal}
-                      bookingCount={bookingCounts[r.id] || 0}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {step === 2 && (
-            <div className="space-y-3">
-              <div className="rounded-xl border border-border bg-muted/30 px-3 sm:px-4 py-2.5 sm:py-3">
-                <p className="text-sm font-medium">
-                  {pairWithTypes.length === 1
-                    ? `Also book a ${pairWithTypes[0]}?`
-                    : 'Also book a companion?'}
-                </p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Optional — same time as {selected?.name}. Skip if not needed.
-                </p>
-              </div>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  value={companionSearch}
-                  onChange={e => setCompanionSearch(e.target.value)}
-                  placeholder={pairWithTypes.length === 1 ? `Search ${pairWithTypes[0]}…` : 'Search companions…'}
-                  className="pl-9"
-                />
-              </div>
-              {filteredCompanions.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-6">
-                  No matching companions found. You can skip.
-                </p>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
-                  {filteredCompanions.map(r => (
-                    <ResourcePickCard
-                      key={r.id}
-                      resource={r}
-                      selected={form.companion_resource_id === r.id}
-                      onSelect={(id) => setForm(f => ({
-                        ...f,
-                        companion_resource_id: f.companion_resource_id === id ? '' : id,
-                      }))}
-                      isInternal={isInternal}
-                      bookingCount={bookingCounts[r.id] || 0}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {step === 3 && (
+          {isEdit ? (
             <>
-              <div className="flex flex-col gap-2">
-                <div className={cn('grid gap-2', (companion || pairedSibling) ? 'grid-cols-2' : 'grid-cols-1')}>
-                  {(selected || booking) && (
-                    <div className="rounded-lg border border-border px-2.5 py-1.5 text-sm min-w-0 space-y-1.5">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <div className="w-8 h-8 rounded-md overflow-hidden bg-muted shrink-0">
-                          {selected?.image_url ? (
-                            <img src={selected.image_url} alt="" className="w-full h-full object-cover" />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center">
-                              <Tag className="w-3.5 h-3.5 text-muted-foreground/40" />
-                            </div>
-                          )}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="font-medium truncate leading-tight">{displayResourceName}</p>
-                          <p className="text-[11px] text-muted-foreground truncate">{displayResourceType}</p>
-                        </div>
-                      </div>
-                      <ResourcePicContact resource={selected} />
-                    </div>
-                  )}
-                  {(companion || pairedSibling) && (
-                    <div className="rounded-lg border border-primary/30 bg-primary/5 px-2.5 py-1.5 text-sm min-w-0 space-y-1.5">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <div className="w-8 h-8 rounded-md overflow-hidden bg-muted shrink-0">
-                          {companion?.image_url ? (
-                            <img src={companion.image_url} alt="" className="w-full h-full object-cover" />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center">
-                              <Tag className="w-3.5 h-3.5 text-muted-foreground/40" />
-                            </div>
-                          )}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="font-medium truncate leading-tight">{displayCompanionName}</p>
-                          <p className="text-[11px] text-muted-foreground truncate">Paired · {displayCompanionType}</p>
-                        </div>
-                      </div>
-                      <ResourcePicContact resource={companion} />
-                    </div>
-                  )}
-                </div>
-                {willNeedApproval && (
-                  <Badge variant="outline" className="border-warning/30 text-warning bg-warning/10 h-fit w-fit">
-                    {isEdit ? 'Changes require approval' : 'Requires approval'}
-                  </Badge>
-                )}
-              </div>
+              {resourceSummaryCards}
 
               <div className="space-y-1.5">
                 <Label>Title / Purpose *</Label>
@@ -858,17 +902,11 @@ export default function BookingModal({
               <div className="grid grid-cols-2 gap-2 sm:gap-4">
                 <div className="space-y-1.5 min-w-0">
                   <Label>Start *</Label>
-                  <DateTimeInput
-                    value={form.start_time}
-                    onChange={e => handleStartChange(e.target.value)}
-                  />
+                  <DateTimeInput value={form.start_time} onChange={e => handleStartChange(e.target.value)} />
                 </div>
                 <div className="space-y-1.5 min-w-0">
                   <Label>End *</Label>
-                  <DateTimeInput
-                    value={form.end_time}
-                    onChange={e => handleEndChange(e.target.value)}
-                  />
+                  <DateTimeInput value={form.end_time} onChange={e => handleEndChange(e.target.value)} />
                 </div>
               </div>
 
@@ -882,65 +920,259 @@ export default function BookingModal({
                 <Textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Any special requirements…" rows={3} />
               </div>
 
-              {!isEdit && (
-                <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
-                  <Switch checked={form.is_recurring} onCheckedChange={v => setForm(f => ({ ...f, is_recurring: v }))} />
-                  <div>
-                    <p className="text-sm font-medium">Recurring (weekly)</p>
-                    <p className="text-xs text-muted-foreground">Repeat this booking every week</p>
+              {costSummary}
+            </>
+          ) : (
+            <>
+              {currentStep === 'datetime' && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-2 sm:gap-4">
+                    <div className="space-y-1.5 min-w-0">
+                      <Label>Start *</Label>
+                      <DateTimeInput value={form.start_time} onChange={e => handleStartChange(e.target.value)} />
+                    </div>
+                    <div className="space-y-1.5 min-w-0">
+                      <Label>End *</Label>
+                      <DateTimeInput value={form.end_time} onChange={e => handleEndChange(e.target.value)} />
+                    </div>
                   </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <Label>Estimated duration</Label>
+                      {customDurationMinutes > 0 && (
+                        <span className="text-xs text-muted-foreground">
+                          Custom: {formatDurationMinutes(customDurationMinutes)}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {BOOKING_DURATION_PRESETS.map(({ label, minutes }) => (
+                        <Button
+                          key={minutes}
+                          type="button"
+                          size="sm"
+                          variant={selectedDuration === minutes ? 'default' : 'outline'}
+                          className="h-8 px-3"
+                          onClick={() => handleDurationSelect(minutes)}
+                        >
+                          {label}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {hasTimeRange && (
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-muted-foreground">Resources available for this time</Label>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        {resourceTypeSummary.map(({ type, total, available }) => (
+                          <button
+                            key={type}
+                            type="button"
+                            onClick={() => { setResourceSearch(type); goNext(); }}
+                            className={cn(
+                              'rounded-lg border px-3 py-2 text-left transition-colors',
+                              available > 0
+                                ? 'border-border hover:border-primary/40 hover:bg-muted/40'
+                                : 'border-destructive/30 bg-destructive/5',
+                            )}
+                          >
+                            <p className="text-sm font-medium truncate">{type}</p>
+                            <p className={cn('text-xs', available > 0 ? 'text-muted-foreground' : 'text-destructive')}>
+                              {available} of {total} available
+                            </p>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
-              {!isEdit && form.is_recurring && (
-                <div className="space-y-1.5">
-                  <Label>Number of Weeks</Label>
-                  <Input type="number" min="2" max="52" value={form.recurrence_weeks}
-                    onChange={e => setForm(f => ({ ...f, recurrence_weeks: e.target.value }))} />
+              {currentStep === 'resource' && (
+                <div className="space-y-3">
+                  {hasTimeRange && (
+                    <div className="flex items-center justify-between gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs">
+                      <span className="text-muted-foreground truncate">{formattedRange}</span>
+                      <button
+                        type="button"
+                        className="text-primary hover:underline shrink-0 font-medium"
+                        onClick={() => jumpToStep('datetime')}
+                      >
+                        Change
+                      </button>
+                    </div>
+                  )}
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      value={resourceSearch}
+                      onChange={e => setResourceSearch(e.target.value)}
+                      placeholder="Search resources…"
+                      className="pl-9"
+                    />
+                  </div>
+                  {filteredResources.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-6">No active resources found.</p>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
+                      {filteredResources.map(r => (
+                        <ResourcePickCard
+                          key={r.id}
+                          resource={r}
+                          selected={form.resource_id === r.id}
+                          onSelect={selectPrimaryResource}
+                          isInternal={isInternal}
+                          bookingCount={bookingCounts[r.id] || 0}
+                          availability={hasTimeRange ? resourceAvailability[r.id] : null}
+                        />
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 
-              {singleCost > 0 && user?.user_type !== 'internal' && (
-                <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-2 text-sm">
-                  <h3 className="font-semibold">Cost Summary</h3>
-                  {selected && primaryCost > 0 && (
-                    <div className="flex justify-between gap-2">
-                      <span className="text-muted-foreground truncate">
-                        {selected.name} · {bookingDurationLabel(selected, form.start_time, form.end_time)} × RM{selected.rate}
-                      </span>
-                      <span className="shrink-0">RM{(primaryCost / 100).toFixed(2)}</span>
+              {currentStep === 'companion' && (
+                <div className="space-y-3">
+                  <div className="rounded-xl border border-border bg-muted/30 px-3 sm:px-4 py-2.5 sm:py-3">
+                    <p className="text-sm font-medium">
+                      {pairWithTypes.length === 1
+                        ? `Also book a ${pairWithTypes[0]}?`
+                        : 'Also book a companion?'}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Optional — same time as {selected?.name}. Skip if not needed.
+                    </p>
+                  </div>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      value={companionSearch}
+                      onChange={e => setCompanionSearch(e.target.value)}
+                      placeholder={pairWithTypes.length === 1 ? `Search ${pairWithTypes[0]}…` : 'Search companions…'}
+                      className="pl-9"
+                    />
+                  </div>
+                  {filteredCompanions.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-6">
+                      No matching companions found. You can skip.
+                    </p>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
+                      {filteredCompanions.map(r => (
+                        <ResourcePickCard
+                          key={r.id}
+                          resource={r}
+                          selected={form.companion_resource_id === r.id}
+                          onSelect={(id) => setForm(f => ({
+                            ...f,
+                            companion_resource_id: f.companion_resource_id === id ? '' : id,
+                          }))}
+                          isInternal={isInternal}
+                          bookingCount={bookingCounts[r.id] || 0}
+                          availability={hasTimeRange ? resourceAvailability[r.id] : null}
+                        />
+                      ))}
                     </div>
                   )}
-                  {companion && companionCost > 0 && (
-                    <div className="flex justify-between gap-2">
-                      <span className="text-muted-foreground truncate">
-                        {companion.name} · {bookingDurationLabel(companion, form.start_time, form.end_time)} × RM{companion.rate}
-                      </span>
-                      <span className="shrink-0">RM{(companionCost / 100).toFixed(2)}</span>
+                </div>
+              )}
+
+              {currentStep === 'details' && (
+                <>
+                  <div className="flex items-center justify-between gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs">
+                    <span className="text-muted-foreground truncate">
+                      {[displayResourceName, displayCompanionName].filter(Boolean).join(' + ')} · {formattedRange}
+                    </span>
+                    <button
+                      type="button"
+                      className="text-primary hover:underline shrink-0 font-medium"
+                      onClick={() => jumpToStep('datetime')}
+                    >
+                      Change
+                    </button>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label>Title / Purpose *</Label>
+                    <Input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. Client pickup, Team meeting…" />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label>Attendees / Passengers</Label>
+                    <Input type="number" min="1" value={form.attendees} onChange={e => setForm(f => ({ ...f, attendees: e.target.value }))} placeholder="1" />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label>Notes</Label>
+                    <Textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Any special requirements…" rows={3} />
+                  </div>
+
+                  <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                    <Switch checked={form.is_recurring} onCheckedChange={v => setForm(f => ({ ...f, is_recurring: v }))} />
+                    <div>
+                      <p className="text-sm font-medium">Recurring (weekly)</p>
+                      <p className="text-xs text-muted-foreground">Repeat this booking every week</p>
                     </div>
-                  )}
+                  </div>
+
                   {form.is_recurring && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">× {form.recurrence_weeks} weeks</span>
-                      <span>RM{(totalCost / 100).toFixed(2)}</span>
+                    <div className="space-y-1.5">
+                      <Label>Number of Weeks</Label>
+                      <Input type="number" min="2" max="52" value={form.recurrence_weeks}
+                        onChange={e => setForm(f => ({ ...f, recurrence_weeks: e.target.value }))} />
                     </div>
                   )}
-                  <div className="border-t pt-2 flex justify-between font-semibold">
-                    <span>Total</span>
-                    <span className="text-primary">RM{(totalCost / 100).toFixed(2)}</span>
+                </>
+              )}
+
+              {currentStep === 'summary' && (
+                <>
+                  {resourceSummaryCards}
+
+                  <div className="rounded-xl border border-border p-4 space-y-3 text-sm">
+                    <div className="flex justify-between gap-2">
+                      <span className="text-muted-foreground shrink-0">Title</span>
+                      <span className="font-medium text-right truncate">{form.title}</span>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <span className="text-muted-foreground shrink-0">When</span>
+                      <span className="font-medium text-right">{formattedRange}</span>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <span className="text-muted-foreground shrink-0">Duration</span>
+                      <span className="font-medium text-right">
+                        {formatDurationMinutes(getDurationMinutes(form.start_time, form.end_time))}
+                      </span>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <span className="text-muted-foreground shrink-0">Attendees</span>
+                      <span className="font-medium text-right">{form.attendees || 1}</span>
+                    </div>
+                    {form.notes && (
+                      <div className="space-y-1">
+                        <span className="text-muted-foreground">Notes</span>
+                        <p className="font-medium whitespace-pre-wrap">{form.notes}</p>
+                      </div>
+                    )}
+                    {form.is_recurring && (
+                      <div className="flex justify-between gap-2">
+                        <span className="text-muted-foreground shrink-0">Repeats</span>
+                        <span className="font-medium text-right">Weekly × {form.recurrence_weeks} weeks</span>
+                      </div>
+                    )}
                   </div>
-                  <div className="flex justify-between text-muted-foreground">
-                    <span>Your balance</span>
-                    <span>RM{((user?.credit_balance_cents || 0) / 100).toFixed(2)}</span>
-                  </div>
-                </div>
+
+                  {costSummary}
+                </>
               )}
             </>
           )}
         </div>
 
         <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-border shrink-0 bg-background flex items-center gap-2">
-          {!isEdit && step > 1 && (
+          {!isEdit && stepIndex > 0 && (
             <Button
               type="button"
               variant="outline"
@@ -955,30 +1187,26 @@ export default function BookingModal({
             </Button>
           )}
 
-          {!isEdit && step === 1 && (
-            <Button className="flex-1 min-w-0 shadow-md shadow-primary/20" size="lg" onClick={goNext} disabled={!form.resource_id}>
-              Continue
-              <ChevronRight className="w-4 h-4 ml-1 shrink-0" />
-            </Button>
-          )}
-
-          {!isEdit && step === 2 && (
+          {!isEdit && currentStep !== 'summary' && (
             <Button
               className="flex-1 min-w-0 shadow-md shadow-primary/20"
               size="lg"
-              onClick={() => {
-                if (!form.companion_resource_id) {
-                  setForm(f => ({ ...f, companion_resource_id: '' }));
-                }
-                goNext();
-              }}
+              onClick={goNext}
+              disabled={continueDisabled}
             >
-              {form.companion_resource_id ? 'Continue' : 'Skip'}
+              {currentStep === 'companion' ? (form.companion_resource_id ? 'Continue' : 'Skip') : 'Continue'}
               <ChevronRight className="w-4 h-4 ml-1 shrink-0" />
             </Button>
           )}
 
-          {(isEdit || step === 3) && (
+          {!isEdit && currentStep === 'summary' && (
+            <Button className="flex-1 min-w-0 shadow-md shadow-primary/20 hover:shadow-primary/30" size="lg" onClick={handleBook} disabled={saving}>
+              {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin shrink-0" />}
+              {submitLabel}
+            </Button>
+          )}
+
+          {isEdit && (
             <Button className="flex-1 min-w-0 shadow-md shadow-primary/20 hover:shadow-primary/30" size="lg" onClick={requestSubmit} disabled={saving}>
               {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin shrink-0" />}
               {submitLabel}

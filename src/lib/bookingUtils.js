@@ -1,6 +1,6 @@
 /** Shared booking/resource status styles using semantic design tokens */
 
-import { differenceInHours, differenceInCalendarDays, differenceInMinutes, addMinutes } from 'date-fns';
+import { differenceInHours, differenceInCalendarDays, differenceInMinutes, addMinutes, isToday, isTomorrow, isSameDay, format } from 'date-fns';
 import { toDateTimeLocalValue } from '@/lib/calendarUtils';
 
 export const BOOKING_DURATION_PRESETS = [
@@ -199,6 +199,85 @@ export function getBookingPhone(booking, resources = []) {
   if (!booking?.resource_id || !resources?.length) return null;
   const resource = resources.find(r => r.id === booking.resource_id);
   return resource?.phone || null;
+}
+
+/**
+ * Given a desired [start, end) window that conflicts with a resource's existing bookings,
+ * find the next time it's free for the same duration. Returns null if nothing opens up
+ * within the search horizon (resource is effectively fully booked).
+ */
+export function findNextAvailableTime(resourceId, start, end, bookings = [], excludeIds = [], horizonDays = 60) {
+  const startDate = new Date(start);
+  const endDate = new Date(end);
+  const duration = endDate - startDate;
+  if (!(duration > 0)) return null;
+
+  const excluded = new Set(excludeIds.filter(Boolean));
+  const relevant = bookings
+    .filter(b =>
+      b.resource_id === resourceId &&
+      !excluded.has(b.id) &&
+      b.status !== 'cancelled' &&
+      b.status !== 'rejected' &&
+      new Date(b.end_time) > startDate,
+    )
+    .map(b => ({ start: new Date(b.start_time), end: new Date(b.end_time) }))
+    .sort((a, b) => a.start - b.start);
+
+  const horizon = new Date(startDate.getTime() + horizonDays * 24 * 60 * 60 * 1000);
+  let candidate = startDate;
+
+  for (const b of relevant) {
+    if (candidate >= horizon) return null;
+    const candidateEnd = new Date(candidate.getTime() + duration);
+    if (b.end <= candidate || b.start >= candidateEnd) continue;
+    candidate = b.end;
+  }
+
+  return candidate >= horizon ? null : candidate;
+}
+
+/**
+ * Given a desired [start, end) window that conflicts with a resource's existing bookings,
+ * find the contiguous busy window covering that conflict — from the earliest overlapping
+ * booking's start through to when the resource frees up for the requested duration.
+ * Returns null if there's no conflict.
+ */
+export function getBusyRange(resourceId, start, end, bookings = [], excludeIds = []) {
+  const startDate = new Date(start);
+  const endDate = new Date(end);
+  const excluded = new Set(excludeIds.filter(Boolean));
+
+  const overlapping = bookings
+    .filter(b =>
+      b.resource_id === resourceId &&
+      !excluded.has(b.id) &&
+      b.status !== 'cancelled' &&
+      b.status !== 'rejected' &&
+      new Date(b.start_time) < endDate &&
+      new Date(b.end_time) > startDate,
+    )
+    .map(b => ({ start: new Date(b.start_time), end: new Date(b.end_time) }))
+    .sort((a, b) => a.start - b.start);
+
+  if (overlapping.length === 0) return null;
+
+  const freeFrom = findNextAvailableTime(resourceId, start, end, bookings, excludeIds);
+  return {
+    start: overlapping[0].start,
+    end: freeFrom || overlapping[overlapping.length - 1].end,
+  };
+}
+
+/** Human label for a busy resource's conflict window, e.g. "Busy 11:00 AM – 12:00 PM". */
+export function formatBusyRangeLabel(range) {
+  if (!range) return 'Fully booked — try another time';
+  const { start, end } = range;
+  const startLabel = format(start, 'h:mm a');
+  const endLabel = isSameDay(start, end) ? format(end, 'h:mm a') : format(end, 'MMM d, h:mm a');
+  if (isToday(start)) return `Busy ${startLabel} – ${endLabel}`;
+  if (isTomorrow(start)) return `Busy tomorrow, ${startLabel} – ${endLabel}`;
+  return `Busy ${format(start, 'MMM d')}, ${startLabel} – ${endLabel}`;
 }
 
 export const statColorMap = {

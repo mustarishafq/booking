@@ -5,30 +5,24 @@ import { useOutletContext, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
+import { isToday, isTomorrow, isThisWeek, compareAsc } from 'date-fns';
 
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { format } from 'date-fns';
 import {
-  Plus, Search, XCircle, Calendar, Clock, CheckCircle2, Ban, BookOpen, User,
-  X, AlertCircle, History, Link2, Phone, Pencil,
+  Plus, Search, Calendar, BookOpen, X, AlertCircle, History, LayoutList,
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { hasPermission, isInternalUser } from '@/lib/permissions';
-import {
-  bookingStatusBadge, findPairedSibling, getBookingPhone, isBookingEditable, phoneTelHref,
-} from '@/lib/bookingUtils';
-import PageHeader from '@/components/layout/PageHeader';
+import { collapsePairedBookings, isBookingEditable } from '@/lib/bookingUtils';
 import EmptyState from '@/components/ui/EmptyState';
 import BookingListItem from '@/components/bookings/BookingListItem';
 import ConfirmActionDialog from '@/components/ui/ConfirmActionDialog';
 import { cn } from '@/lib/utils';
 
 const HISTORY_STATUSES = new Set(['completed', 'cancelled', 'rejected']);
+const STATUS_OPTIONS = ['all', 'confirmed', 'pending', 'cancelled', 'rejected', 'completed'];
 
 const CONFIRM_COPY = {
   approve: {
@@ -51,34 +45,94 @@ const CONFIRM_COPY = {
   },
 };
 
-function StatPill({ icon: Icon, label, value, color = 'primary', className }) {
-  const colors = {
-    primary: 'bg-primary/10 text-primary',
-    success: 'bg-success/10 text-success',
-    warning: 'bg-warning/10 text-warning',
-    accent: 'bg-info/10 text-info',
+function ViewTab({ active, label, count, icon: Icon, onClick, tone = 'default' }) {
+  const activeTone = {
+    default: 'bg-background text-foreground shadow-sm',
+    warning: 'bg-warning/15 text-warning shadow-sm ring-1 ring-warning/25',
   };
 
   return (
-    <div
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
       className={cn(
-        'rounded-2xl border border-border bg-card min-w-0',
-        'flex flex-col items-center justify-center gap-1.5 p-3 text-center',
-        'sm:flex-row sm:items-center sm:justify-start sm:gap-3 sm:px-4 sm:py-3 sm:text-left',
-        className,
+        'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors',
+        active
+          ? activeTone[tone]
+          : 'text-muted-foreground hover:text-foreground',
       )}
     >
-      <div className={cn('w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0', colors[color])}>
-        <Icon className="w-4 h-4" />
-      </div>
-      <div className="min-w-0">
-        <p className="text-xl sm:text-lg font-bold leading-none tracking-tight tabular-nums">{value}</p>
-        <p className="text-[10px] sm:text-xs font-medium text-muted-foreground uppercase tracking-wider mt-1 truncate">
-          {label}
-        </p>
-      </div>
-    </div>
+      {Icon && <Icon className="w-3.5 h-3.5 shrink-0 opacity-80" />}
+      {label}
+      <span
+        className={cn(
+          'text-[10px] font-semibold tabular-nums px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center',
+          active ? 'bg-foreground/10' : 'bg-muted',
+        )}
+      >
+        {count}
+      </span>
+    </button>
   );
+}
+
+function StatusChip({ active, label, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'px-3 py-1.5 rounded-full text-xs font-medium border transition-colors shrink-0 capitalize whitespace-nowrap',
+        active
+          ? 'bg-primary text-primary-foreground border-primary shadow-sm shadow-primary/20'
+          : 'border-border bg-card text-muted-foreground hover:text-foreground hover:border-primary/40',
+      )}
+    >
+      {label}
+    </button>
+  );
+}
+
+function groupBookingsByDate(bookings, viewTab) {
+  if (viewTab === 'history') {
+    return [{ key: 'history', label: 'Past bookings', items: bookings }];
+  }
+
+  const groups = {
+    today: [],
+    tomorrow: [],
+    thisWeek: [],
+    later: [],
+    past: [],
+  };
+
+  const now = new Date();
+  bookings.forEach((b) => {
+    const start = new Date(b.start_time);
+    const end = new Date(b.end_time);
+    if (HISTORY_STATUSES.has(b.status) || end < now) {
+      groups.past.push(b);
+      return;
+    }
+    if (isToday(start)) groups.today.push(b);
+    else if (isTomorrow(start)) groups.tomorrow.push(b);
+    else if (isThisWeek(start, { weekStartsOn: 1 })) groups.thisWeek.push(b);
+    else groups.later.push(b);
+  });
+
+  const order = [
+    { key: 'today', label: 'Today', items: groups.today },
+    { key: 'tomorrow', label: 'Tomorrow', items: groups.tomorrow },
+    { key: 'thisWeek', label: 'This week', items: groups.thisWeek },
+    { key: 'later', label: 'Later', items: groups.later },
+  ];
+
+  if (viewTab === 'all') {
+    order.push({ key: 'past', label: 'Past', items: groups.past });
+  }
+
+  return order.filter((g) => g.items.length > 0);
 }
 
 export default function Bookings() {
@@ -143,21 +197,26 @@ export default function Bookings() {
     [bookings, seeAll, user?.email],
   );
 
+  const collapsedVisibleBookings = useMemo(
+    () => collapsePairedBookings(visibleBookings),
+    [visibleBookings],
+  );
+
   const tabCounts = useMemo(() => {
     const now = new Date();
     return {
-      upcoming: visibleBookings.filter(b => !HISTORY_STATUSES.has(b.status) && new Date(b.end_time) >= now).length,
-      history: visibleBookings.filter(b => HISTORY_STATUSES.has(b.status) || new Date(b.end_time) < now).length,
-      all: visibleBookings.length,
-      pending: visibleBookings.filter(b => b.status === 'pending').length,
+      upcoming: collapsedVisibleBookings.filter(b => !HISTORY_STATUSES.has(b.status) && new Date(b.end_time) >= now).length,
+      history: collapsedVisibleBookings.filter(b => HISTORY_STATUSES.has(b.status) || new Date(b.end_time) < now).length,
+      all: collapsedVisibleBookings.length,
+      pending: collapsedVisibleBookings.filter(b => b.status === 'pending').length,
     };
-  }, [visibleBookings]);
+  }, [collapsedVisibleBookings]);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
     const now = new Date();
 
-    return visibleBookings
+    return collapsedVisibleBookings
       .filter(b => userFilter === 'all' || b.booked_by_email === userFilter)
       .filter(b => statusFilter === 'all' || b.status === statusFilter)
       .filter(b => {
@@ -173,13 +232,24 @@ export default function Bookings() {
         b.title?.toLowerCase().includes(q) ||
         b.resource_name?.toLowerCase().includes(q) ||
         b.room_name?.toLowerCase().includes(q) ||
+        b.pairedSibling?.resource_name?.toLowerCase().includes(q) ||
         b.booked_by_email?.toLowerCase().includes(q) ||
         b.booked_by_name?.toLowerCase().includes(q)
-      );
-  }, [visibleBookings, userFilter, statusFilter, viewTab, search]);
+      )
+      .sort((a, b) => {
+        if (viewTab === 'history') {
+          return compareAsc(new Date(b.start_time), new Date(a.start_time));
+        }
+        return compareAsc(new Date(a.start_time), new Date(b.start_time));
+      });
+  }, [collapsedVisibleBookings, userFilter, statusFilter, viewTab, search]);
 
-  const activeFilterCount = (statusFilter !== 'all' ? 1 : 0) + (userFilter !== 'all' ? 1 : 0);
-  const hasActiveFilters = search.trim() !== '' || activeFilterCount > 0;
+  const grouped = useMemo(
+    () => groupBookingsByDate(filtered, viewTab),
+    [filtered, viewTab],
+  );
+
+  const hasActiveFilters = search.trim() !== '' || statusFilter !== 'all' || userFilter !== 'all';
 
   const clearFilters = () => {
     setSearch('');
@@ -187,11 +257,15 @@ export default function Bookings() {
     setUserFilter('all');
   };
 
-  const TABS = [
-    { key: 'upcoming', label: 'Upcoming', icon: Calendar, count: tabCounts.upcoming },
-    { key: 'history', label: 'History', icon: History, count: tabCounts.history },
-    { key: 'all', label: 'All', icon: BookOpen, count: tabCounts.all },
-  ];
+  const selectUpcoming = () => { setViewTab('upcoming'); setStatusFilter('all'); };
+  const selectPending = () => { setViewTab('all'); setStatusFilter('pending'); };
+  const selectHistoryView = () => { setViewTab('history'); setStatusFilter('all'); };
+  const selectTotal = () => { setViewTab('all'); setStatusFilter('all'); };
+
+  const isUpcomingActive = viewTab === 'upcoming' && statusFilter === 'all';
+  const isPendingActive = statusFilter === 'pending';
+  const isHistoryActive = viewTab === 'history' && statusFilter === 'all';
+  const isTotalActive = viewTab === 'all' && statusFilter === 'all';
 
   const requestAction = (type, booking) => setConfirmAction({ type, booking });
 
@@ -206,45 +280,58 @@ export default function Bookings() {
   const runConfirmedAction = async () => {
     if (!confirmAction) return;
     const { type, booking } = confirmAction;
+    const bookingsToUpdate = [booking, booking.pairedSibling].filter(Boolean);
     setActionLoading(true);
     try {
       if (type === 'approve') {
-        await db.entities.Booking.update(booking.id, { status: 'confirmed' });
-        const alreadyCharged = transactions.some(
-          t => t.booking_id === booking.id && t.type === 'booking_charge',
-        );
-        if (booking.cost_cents > 0 && !alreadyCharged) {
-          const owner = allUsers.find(u => u.email === booking.booked_by_email);
-          if (owner) {
-            const newBalance = (owner.credit_balance_cents || 0) - booking.cost_cents;
-            await db.entities.User.update(owner.id, { credit_balance_cents: newBalance });
-            await db.entities.Transaction.create({
-              user_email: owner.email,
-              type: 'booking_charge',
-              amount_cents: -booking.cost_cents,
-              balance_after_cents: newBalance,
-              description: `Booking approved: ${booking.title} — ${booking.resource_name}`,
-              booking_id: booking.id,
-            });
+        const ownerBalances = new Map();
+        for (const bk of bookingsToUpdate) {
+          await db.entities.Booking.update(bk.id, { status: 'confirmed' });
+          const alreadyCharged = transactions.some(
+            t => t.booking_id === bk.id && t.type === 'booking_charge',
+          );
+          if (bk.cost_cents > 0 && !alreadyCharged) {
+            const owner = allUsers.find(u => u.email === bk.booked_by_email);
+            if (owner) {
+              const currentBalance = ownerBalances.has(owner.id)
+                ? ownerBalances.get(owner.id)
+                : (owner.credit_balance_cents || 0);
+              const newBalance = currentBalance - bk.cost_cents;
+              ownerBalances.set(owner.id, newBalance);
+              await db.entities.User.update(owner.id, { credit_balance_cents: newBalance });
+              await db.entities.Transaction.create({
+                user_email: owner.email,
+                type: 'booking_charge',
+                amount_cents: -bk.cost_cents,
+                balance_after_cents: newBalance,
+                description: `Booking approved: ${bk.title} — ${bk.resource_name}`,
+                booking_id: bk.id,
+              });
+            }
           }
         }
         toast.success('Booking approved');
       } else if (type === 'reject') {
-        await db.entities.Booking.update(booking.id, { status: 'rejected' });
+        for (const bk of bookingsToUpdate) {
+          await db.entities.Booking.update(bk.id, { status: 'rejected' });
+        }
         toast.success('Booking rejected');
       } else if (type === 'cancel') {
-        await db.entities.Booking.update(booking.id, { status: 'cancelled' });
-        if (booking.cost_cents && booking.booked_by_email === user?.email) {
-          const newBalance = (user.credit_balance_cents || 0) + booking.cost_cents;
-          await db.auth.updateMe({ credit_balance_cents: newBalance });
-          await db.entities.Transaction.create({
-            user_email: user.email,
-            type: 'refund',
-            amount_cents: booking.cost_cents,
-            balance_after_cents: newBalance,
-            description: `Refund: ${booking.title} at ${booking.resource_name || booking.room_name}`,
-            booking_id: booking.id,
-          });
+        let selfBalance = user?.credit_balance_cents || 0;
+        for (const bk of bookingsToUpdate) {
+          await db.entities.Booking.update(bk.id, { status: 'cancelled' });
+          if (bk.cost_cents && bk.booked_by_email === user?.email) {
+            selfBalance += bk.cost_cents;
+            await db.auth.updateMe({ credit_balance_cents: selfBalance });
+            await db.entities.Transaction.create({
+              user_email: user.email,
+              type: 'refund',
+              amount_cents: bk.cost_cents,
+              balance_after_cents: selfBalance,
+              description: `Refund: ${bk.title} at ${bk.resource_name || bk.room_name}`,
+              booking_id: bk.id,
+            });
+          }
         }
         toast.success('Booking cancelled');
       }
@@ -261,139 +348,139 @@ export default function Bookings() {
 
   const confirmCopy = confirmAction ? CONFIRM_COPY[confirmAction.type] : null;
 
-  const filterControls = (
-    <>
-      {(seeAll && bookers.length > 0) && (
-        <Select value={userFilter} onValueChange={setUserFilter}>
-          <SelectTrigger className="w-[9.5rem] sm:w-[11rem] shrink-0">
-            <SelectValue placeholder="All users" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All users</SelectItem>
-            {bookers.map(b => (
-              <SelectItem key={b.email} value={b.email}>
-                {b.name} ({b.email})
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      )}
-      <Select value={statusFilter} onValueChange={setStatusFilter}>
-        <SelectTrigger className="w-[7.5rem] sm:w-[8.5rem] shrink-0"><SelectValue placeholder="All status" /></SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">All status</SelectItem>
-          {['confirmed', 'pending', 'cancelled', 'rejected', 'completed'].map(s => (
-            <SelectItem key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </>
-  );
+  const subtitle = isLoading
+    ? 'Loading bookings…'
+    : `${filtered.length} booking${filtered.length !== 1 ? 's' : ''}${
+      userFilter !== 'all' ? ` · ${bookers.find(b => b.email === userFilter)?.name || userFilter}` : ''
+    }`;
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        icon={BookOpen}
-        title="Bookings"
-        description={seeAll ? 'Search all bookings and view booking history by user' : 'Your bookings and history'}
-        actions={
-          <Button
-            className="gap-2 w-full sm:w-auto shadow-md shadow-primary/20 hover:shadow-primary/30"
-            onClick={() => openBookingModal?.()}
-          >
-            <Plus className="w-4 h-4" />
-            New Booking
-          </Button>
-        }
-      />
-
-      {!isLoading && visibleBookings.length > 0 && (
-        <div className={cn(
-          'grid gap-2.5',
-          canManage ? 'grid-cols-2 lg:grid-cols-4' : 'grid-cols-3',
-        )}
+    <div className="space-y-5">
+      <motion.div
+        initial={{ opacity: 0, y: -8 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4"
+      >
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-2.5">
+            <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <BookOpen className="w-5 h-5" />
+            </span>
+            Bookings
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1.5 ml-[3.25rem]">
+            {subtitle}
+          </p>
+        </div>
+        <Button
+          className="gap-2 w-full sm:w-auto shadow-md shadow-primary/20 hover:shadow-primary/30 shrink-0"
+          onClick={() => openBookingModal?.()}
         >
-          <StatPill icon={Calendar} label="Upcoming" value={tabCounts.upcoming} color="primary" />
-          {canManage && (
-            <StatPill icon={AlertCircle} label="Pending" value={tabCounts.pending} color="warning" />
-          )}
-          <StatPill icon={History} label="History" value={tabCounts.history} color="accent" />
-          <StatPill icon={BookOpen} label="Total" value={tabCounts.all} color="success" />
-        </div>
-      )}
+          <Plus className="w-4 h-4" />
+          New Booking
+        </Button>
+      </motion.div>
 
-      <div className="space-y-3">
-        <div className="flex gap-1 overflow-x-auto pb-1 -mx-1 px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden border-b border-border">
-          {TABS.map(tab => {
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.key}
-                type="button"
-                onClick={() => setViewTab(tab.key)}
-                className={cn(
-                  'flex items-center gap-1.5 px-3 pb-2.5 text-sm font-medium border-b-2 transition-colors -mb-px whitespace-nowrap flex-shrink-0',
-                  viewTab === tab.key
-                    ? 'border-primary text-primary'
-                    : 'border-transparent text-muted-foreground hover:text-foreground',
-                )}
-              >
-                <Icon className="w-4 h-4 shrink-0" />
-                <span>{tab.label}</span>
-                <span className={cn(
-                  'text-xs px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center',
-                  viewTab === tab.key ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground',
-                )}
-                >
-                  {tab.count}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="flex gap-2 sm:gap-3 items-center">
+      <div className="rounded-2xl border border-border bg-card p-3 sm:p-4 space-y-3 shadow-sm">
+        <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
           <div className="relative flex-1 min-w-0">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
             <Input
-              className="pl-9"
-              placeholder={seeAll ? 'Search title, resource, user name or email…' : 'Search bookings…'}
+              className="pl-9 pr-9 h-10"
+              placeholder={seeAll ? 'Search title, resource, or user…' : 'Search bookings…'}
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch('')}
+                aria-label="Clear search"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
-          <div className="flex gap-2 shrink-0">
-            {filterControls}
-          </div>
+
+          {(seeAll && bookers.length > 0) && (
+            <Select value={userFilter} onValueChange={setUserFilter}>
+              <SelectTrigger className="w-full sm:w-[11rem] h-10 shrink-0">
+                <SelectValue placeholder="All users" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All users</SelectItem>
+                {bookers.map(b => (
+                  <SelectItem key={b.email} value={b.email}>
+                    {b.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
+          {hasActiveFilters && (
+            <Button variant="ghost" size="sm" className="h-10 gap-1 shrink-0" onClick={clearFilters}>
+              <X className="w-3.5 h-3.5" />
+              Clear
+            </Button>
+          )}
         </div>
 
-        {!isLoading && (
-          <div className="flex items-center gap-2 flex-wrap min-h-8">
-            <p className="text-sm text-muted-foreground">
-              {filtered.length} booking{filtered.length !== 1 ? 's' : ''}
-              {userFilter !== 'all' ? ` for ${bookers.find(b => b.email === userFilter)?.name || userFilter}` : ''}
-            </p>
-            {hasActiveFilters && (
-              <Button variant="ghost" size="sm" className="h-7 px-2 text-xs gap-1" onClick={clearFilters}>
-                <X className="w-3 h-3" />
-                Clear filters
-              </Button>
-            )}
+        <div className="flex items-center gap-1 rounded-xl bg-muted p-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <ViewTab
+            active={isUpcomingActive}
+            label="Upcoming"
+            count={tabCounts.upcoming}
+            icon={Calendar}
+            onClick={selectUpcoming}
+          />
+          {canManage && (
+            <ViewTab
+              active={isPendingActive}
+              label="Pending"
+              count={tabCounts.pending}
+              icon={AlertCircle}
+              onClick={selectPending}
+              tone="warning"
+            />
+          )}
+          <ViewTab
+            active={isHistoryActive}
+            label="History"
+            count={tabCounts.history}
+            icon={History}
+            onClick={selectHistoryView}
+          />
+          <ViewTab
+            active={isTotalActive}
+            label="All"
+            count={tabCounts.all}
+            icon={LayoutList}
+            onClick={selectTotal}
+          />
+        </div>
+
+        {(viewTab === 'all' || viewTab === 'history') && (
+          <div className="flex gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {STATUS_OPTIONS.map(s => (
+              <StatusChip
+                key={s}
+                active={statusFilter === s}
+                label={s === 'all' ? 'All status' : s}
+                onClick={() => setStatusFilter(s === 'all' ? 'all' : (statusFilter === s ? 'all' : s))}
+              />
+            ))}
           </div>
         )}
       </div>
 
       {isLoading ? (
-        <>
-          <div className="lg:hidden grid grid-cols-1 md:grid-cols-2 gap-3">
-            {[1, 2, 3, 4].map(i => (
-              <Skeleton key={i} className="h-44 rounded-2xl" />
-            ))}
-          </div>
-          <div className="hidden lg:block">
-            <Skeleton className="h-96 rounded-2xl" />
-          </div>
-        </>
+        <div className="space-y-3">
+          {[1, 2, 3, 4, 5].map(i => (
+            <Skeleton key={i} className="h-[5.5rem] rounded-2xl" />
+          ))}
+        </div>
       ) : filtered.length === 0 ? (
         <EmptyState
           icon={Calendar}
@@ -405,196 +492,59 @@ export default function Bookings() {
                 <Plus className="w-4 h-4" />
                 New Booking
               </Button>
+            ) : hasActiveFilters ? (
+              <Button variant="outline" size="sm" className="mt-2" onClick={clearFilters}>
+                Clear filters
+              </Button>
             ) : null
           }
         />
       ) : (
-        <>
-          <div className="lg:hidden grid grid-cols-1 md:grid-cols-2 gap-3">
-            {filtered.map((b, i) => (
-              <motion.div
-                key={b.id}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: Math.min(i * 0.04, 0.24) }}
-              >
-                <BookingListItem
-                  booking={b}
-                  pairedSibling={findPairedSibling(b, bookings)}
-                  resources={resources}
-                  showBooker={seeAll}
-                  hideCost={hideCost}
-                  canManage={canManage}
-                  canAct={canManage || b.booked_by_email === user?.email}
-                  onApprove={(booking) => requestAction('approve', booking)}
-                  onReject={(booking) => requestAction('reject', booking)}
-                  onCancel={(booking) => requestAction('cancel', booking)}
-                  onEdit={handleEdit}
-                />
-              </motion.div>
-            ))}
-          </div>
-
-          <Card className="hidden lg:block rounded-2xl border border-border overflow-hidden">
-            <CardContent className="p-0">
-              <div className="overflow-x-auto max-h-[min(32rem,calc(100dvh-18rem))] overflow-y-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="hover:bg-transparent">
-                      <TableHead className="sticky top-0 z-10 bg-card whitespace-nowrap">Title</TableHead>
-                      {seeAll && (
-                        <TableHead className="sticky top-0 z-10 bg-card whitespace-nowrap">Booked by</TableHead>
-                      )}
-                      <TableHead className="sticky top-0 z-10 bg-card whitespace-nowrap">Resource</TableHead>
-                      <TableHead className="sticky top-0 z-10 bg-card whitespace-nowrap">Date & time</TableHead>
-                      {!hideCost && (
-                        <TableHead className="sticky top-0 z-10 bg-card whitespace-nowrap text-right">Cost</TableHead>
-                      )}
-                      <TableHead className="sticky top-0 z-10 bg-card whitespace-nowrap">Status</TableHead>
-                      <TableHead className="sticky top-0 z-10 bg-card whitespace-nowrap text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filtered.map(b => {
-                      const canAct = canManage || b.booked_by_email === user?.email;
-                      const editable = canAct && isBookingEditable(b);
-                      return (
-                      <TableRow key={b.id} className="group">
-                        <TableCell className="max-w-[200px]">
-                          <div>
-                            <p className="font-medium truncate">{b.title}</p>
-                            <div className="flex flex-wrap gap-1 mt-1">
-                              {b.is_recurring && (
-                                <Badge variant="outline" className="text-xs">Recurring</Badge>
-                              )}
-                              {findPairedSibling(b, bookings) && (
-                                <Badge variant="outline" className="text-xs gap-1 border-primary/30 text-primary bg-primary/5">
-                                  <Link2 className="w-3 h-3" />
-                                  Paired
-                                </Badge>
-                              )}
-                            </div>
-                          </div>
-                        </TableCell>
-                        {seeAll && (
-                          <TableCell>
-                            <div className="flex items-center gap-2 min-w-[140px] max-w-[180px]">
-                              <User className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                              <div className="min-w-0">
-                                <p className="text-sm truncate">{b.booked_by_name || '—'}</p>
-                                <p className="text-xs text-muted-foreground truncate">{b.booked_by_email}</p>
-                              </div>
-                            </div>
-                          </TableCell>
-                        )}
-                        <TableCell className="max-w-[160px]">
-                          <p className="text-sm truncate">{b.resource_name}</p>
-                          {b.resource_type && (
-                            <span className="text-xs text-muted-foreground">{b.resource_type}</span>
-                          )}
-                          {(() => {
-                            const sibling = findPairedSibling(b, bookings);
-                            return sibling ? (
-                              <p className="text-xs text-primary mt-0.5 truncate">
-                                + {sibling.resource_name}
-                              </p>
-                            ) : null;
-                          })()}
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap">
-                          <p className="text-sm">{format(new Date(b.start_time), 'MMM d, yyyy')}</p>
-                          <p className="text-xs text-muted-foreground flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            {format(new Date(b.start_time), 'h:mm a')} – {format(new Date(b.end_time), 'h:mm a')}
-                          </p>
-                        </TableCell>
-                        {!hideCost && (
-                          <TableCell className="font-medium text-right tabular-nums whitespace-nowrap">
-                            RM{((b.cost_cents || 0) / 100).toFixed(2)}
-                          </TableCell>
-                        )}
-                        <TableCell>
-                          <Badge variant="outline" className={cn('capitalize', bookingStatusBadge[b.status])}>
-                            {b.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex gap-1 justify-end flex-wrap">
-                            {(() => {
-                              const callHref = phoneTelHref(getBookingPhone(b, resources));
-                              return callHref ? (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-8"
-                                  asChild
-                                >
-                                  <a href={callHref} aria-label={`Call ${b.resource_name}`}>
-                                    <Phone className="w-4 h-4 xl:mr-1" />
-                                    <span className="hidden xl:inline">Call</span>
-                                  </a>
-                                </Button>
-                              ) : null;
-                            })()}
-                            {editable && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-8"
-                                onClick={() => handleEdit(b)}
-                                aria-label="Edit booking"
-                              >
-                                <Pencil className="w-4 h-4 xl:mr-1" />
-                                <span className="hidden xl:inline">Edit</span>
-                              </Button>
-                            )}
-                            {canManage && b.status === 'pending' && (
-                              <>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-8 text-success hover:text-success"
-                                  onClick={() => requestAction('approve', b)}
-                                  aria-label="Approve booking"
-                                >
-                                  <CheckCircle2 className="w-4 h-4 xl:mr-1" />
-                                  <span className="hidden xl:inline">Approve</span>
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-8 text-destructive hover:text-destructive"
-                                  onClick={() => requestAction('reject', b)}
-                                  aria-label="Reject booking"
-                                >
-                                  <Ban className="w-4 h-4 xl:mr-1" />
-                                  <span className="hidden xl:inline">Reject</span>
-                                </Button>
-                              </>
-                            )}
-                            {b.status === 'confirmed' && canAct && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-8 text-destructive hover:text-destructive"
-                                onClick={() => requestAction('cancel', b)}
-                                aria-label="Cancel booking"
-                              >
-                                <XCircle className="w-4 h-4 xl:mr-1" />
-                                <span className="hidden xl:inline">Cancel</span>
-                              </Button>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
+        <div className="space-y-6">
+          {grouped.map((group) => (
+            <section key={group.key} className="space-y-3">
+              <div className="flex items-center gap-3 px-0.5">
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  {group.label}
+                </h2>
+                <div className="h-px flex-1 bg-border/80" />
+                <span className="text-[10px] font-semibold tabular-nums text-muted-foreground/80">
+                  {group.items.length}
+                </span>
               </div>
-            </CardContent>
-          </Card>
-        </>
+              <motion.div
+                className="space-y-3"
+                initial="hidden"
+                animate="visible"
+                variants={{
+                  hidden: { opacity: 0 },
+                  visible: { opacity: 1, transition: { staggerChildren: 0.04 } },
+                }}
+              >
+                {group.items.map((b) => (
+                  <motion.div
+                    key={b.id}
+                    variants={{ hidden: { opacity: 0, y: 8 }, visible: { opacity: 1, y: 0 } }}
+                  >
+                    <BookingListItem
+                      booking={b}
+                      pairedSibling={b.pairedSibling}
+                      resources={resources}
+                      showBooker={seeAll}
+                      hideCost={hideCost}
+                      canManage={canManage}
+                      canAct={canManage || b.booked_by_email === user?.email}
+                      onApprove={(booking) => requestAction('approve', booking)}
+                      onReject={(booking) => requestAction('reject', booking)}
+                      onCancel={(booking) => requestAction('cancel', booking)}
+                      onEdit={handleEdit}
+                    />
+                  </motion.div>
+                ))}
+              </motion.div>
+            </section>
+          ))}
+        </div>
       )}
 
       <ConfirmActionDialog
@@ -603,7 +553,7 @@ export default function Bookings() {
         title={confirmCopy?.title}
         description={
           confirmAction
-            ? `${confirmCopy.description}${confirmAction.booking?.title ? ` “${confirmAction.booking.title}”` : ''}${confirmAction.booking?.resource_name ? ` — ${confirmAction.booking.resource_name}` : ''}`
+            ? `${confirmCopy.description}${confirmAction.booking?.title ? ` “${confirmAction.booking.title}”` : ''}${confirmAction.booking?.resource_name ? ` — ${[confirmAction.booking.resource_name, confirmAction.booking.pairedSibling?.resource_name].filter(Boolean).join(' + ')}` : ''}`
             : undefined
         }
         confirmLabel={confirmCopy?.confirmLabel}
