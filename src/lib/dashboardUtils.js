@@ -1,10 +1,11 @@
-import { isToday } from 'date-fns';
+import { startOfDay, addDays } from 'date-fns';
 import {
   hasPermission,
   isInternalUser,
   showDashboardRevenue,
   showUserCredits,
 } from '@/lib/permissions';
+import { bookingOverlapsRange } from '@/lib/calendarUtils';
 
 const HISTORY_STATUSES = new Set(['completed', 'cancelled', 'rejected']);
 
@@ -110,7 +111,9 @@ export function buildDashboardStats({
   const upcoming = scoped.filter(b => isUpcomingBooking(b, now));
   const confirmed = scoped.filter(b => b.status === 'confirmed');
   const pendingBookings = bookings.filter(b => b.status === 'pending').length;
-  const todayBookings = bookings.filter(b => isToday(new Date(b.start_time))).length;
+  const todayStart = startOfDay(now);
+  const todayEnd = addDays(todayStart, 1);
+  const todayBookings = bookings.filter(b => bookingOverlapsRange(b, todayStart, todayEnd)).length;
   const pendingUsers = users.filter(u => !u.approved).length;
   const canManageBookings = hasPermission(user, 'manage_bookings');
   const canViewUsers = hasPermission(user, 'view_users');
@@ -368,8 +371,10 @@ export function getListBookings(bookings, user) {
   const prioritizePending = adminView && hasPermission(user, 'manage_bookings');
 
   if (adminView) {
+    const todayStart = startOfDay(new Date());
+    const todayEnd = addDays(todayStart, 1);
     const attention = scoped.filter(
-      b => b.status === 'pending' || (isUpcomingBooking(b) && isToday(new Date(b.start_time))),
+      b => b.status === 'pending' || (isUpcomingBooking(b) && bookingOverlapsRange(b, todayStart, todayEnd)),
     );
     const pool = attention.length > 0 ? attention : scoped;
     return sortBookingsForDashboard(pool, { prioritizePending }).slice(0, 5);

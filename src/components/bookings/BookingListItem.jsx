@@ -1,6 +1,6 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { format, isToday, isTomorrow } from 'date-fns';
+import { format, isToday, isTomorrow, isSameDay } from 'date-fns';
 import {
   Ban, CheckCircle2, Link2, Pencil, Phone, Repeat, User, XCircle,
 } from 'lucide-react';
@@ -17,9 +17,12 @@ const statusAccent = {
 };
 
 function timeLabel(start, end) {
-  if (isToday(start)) return `Today · ${format(start, 'h:mm a')} – ${format(end, 'h:mm a')}`;
-  if (isTomorrow(start)) return `Tomorrow · ${format(start, 'h:mm a')} – ${format(end, 'h:mm a')}`;
-  return `${format(start, 'EEE, MMM d')} · ${format(start, 'h:mm a')} – ${format(end, 'h:mm a')}`;
+  const endTime = isSameDay(start, end)
+    ? format(end, 'h:mm a')
+    : format(end, 'MMM d, h:mm a');
+  if (isToday(start)) return `Today · ${format(start, 'h:mm a')} – ${endTime}`;
+  if (isTomorrow(start)) return `Tomorrow · ${format(start, 'h:mm a')} – ${endTime}`;
+  return `${format(start, 'EEE, MMM d')} · ${format(start, 'h:mm a')} – ${endTime}`;
 }
 
 export default function BookingListItem({

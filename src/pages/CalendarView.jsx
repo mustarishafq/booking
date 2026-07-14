@@ -16,11 +16,12 @@ import {
 } from 'lucide-react';
 import { hasPermission } from '@/lib/permissions';
 import {
-  bookingStatusSolid, isBookingEditable, collapsePairedBookings, findPairedSibling, getPairedResourceLabel,
+  isBookingEditable, collapsePairedBookings, findPairedSibling,
 } from '@/lib/bookingUtils';
 import PageHeader from '@/components/layout/PageHeader';
 import CalendarTimeline, { CalendarDayDetail, CalendarDayDetailContent } from '@/components/calendar/CalendarTimeline';
 import CalendarWeekTimeline from '@/components/calendar/CalendarWeekTimeline';
+import MonthCalendarWeek from '@/components/calendar/MonthCalendarWeek';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import ConfirmActionDialog from '@/components/ui/ConfirmActionDialog';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -29,12 +30,12 @@ import {
   filterCalendarBookings,
   getBookingsForDay,
   getBookingsInWeek,
+  getBookingsInMonth,
   toDateTimeLocalValue,
-  getCalendarBookingTitle,
 } from '@/lib/calendarUtils';
 import {
   format, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
-  addDays, addMonths, subMonths, isSameMonth, isSameDay, isToday,
+  addDays, addMonths, subMonths, isSameMonth,
 } from 'date-fns';
 import { cn } from '@/lib/utils';
 
@@ -57,17 +58,6 @@ const WEEKDAYS = [
   { full: 'Fri', short: 'F' },
   { full: 'Sat', short: 'S' },
 ];
-
-function statusDotClass(status) {
-  const map = {
-    confirmed: 'bg-success',
-    pending: 'bg-warning',
-    completed: 'bg-success',
-    cancelled: 'bg-destructive/60',
-    rejected: 'bg-destructive',
-  };
-  return map[status] || 'bg-muted-foreground';
-}
 
 function CalendarStatPill({ icon: Icon, label, value, color = 'primary' }) {
   const colors = {
@@ -144,6 +134,19 @@ export default function CalendarView() {
     return days;
   }, [calendarStart, calendarEnd]);
 
+  const calendarWeeks = useMemo(() => {
+    const weeks = [];
+    for (let i = 0; i < calendarDays.length; i += 7) {
+      weeks.push(calendarDays.slice(i, i + 7));
+    }
+    return weeks;
+  }, [calendarDays]);
+
+  const monthVisibleBookings = useMemo(
+    () => collapsePairedBookings(visibleBookings),
+    [visibleBookings],
+  );
+
   const timelineDate = selectedDay || new Date();
   const rawSelectedDayBookings = useMemo(
     () => getBookingsForDay(visibleBookings, timelineDate),
@@ -160,9 +163,7 @@ export default function CalendarView() {
   );
 
   const monthBookingCount = useMemo(
-    () => collapsePairedBookings(
-      visibleBookings.filter(b => isSameMonth(new Date(b.start_time), currentDate)),
-    ).length,
+    () => collapsePairedBookings(getBookingsInMonth(visibleBookings, currentDate)).length,
     [visibleBookings, currentDate],
   );
 
@@ -441,95 +442,36 @@ export default function CalendarView() {
                 </Button>
               </div>
 
-              <div className="grid grid-cols-7 gap-px bg-border rounded-xl overflow-hidden">
-                {WEEKDAYS.map(d => (
-                  <div
-                    key={d.full}
-                    className="bg-muted py-1.5 sm:py-2 text-center text-[10px] sm:text-xs font-semibold text-muted-foreground"
-                  >
-                    <span className="sm:hidden">{d.short}</span>
-                    <span className="hidden sm:inline">{d.full}</span>
-                  </div>
-                ))}
-                {calendarDays.map((day, i) => {
-                  const dayBookings = collapsePairedBookings(getBookingsForDay(visibleBookings, day));
-                  const isSelected = selectedDay && isSameDay(day, selectedDay);
-                  const today = isToday(day);
-                  const inMonth = isSameMonth(day, currentDate);
-
-                  return (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => handleDaySelect(day)}
+              <div className="rounded-xl overflow-hidden border border-border">
+                <div className="grid grid-cols-7 border-b border-border">
+                  {WEEKDAYS.map((d, i) => (
+                    <div
+                      key={d.full}
                       className={cn(
-                        'bg-card text-left p-1 sm:p-1.5 transition-colors duration-200',
-                        'min-h-[3.25rem] sm:min-h-[4.75rem] md:min-h-[5.5rem] lg:min-h-[6rem]',
-                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
-                        !inMonth && 'opacity-40',
-                        isSelected && 'ring-2 ring-primary ring-inset bg-primary/5',
-                        today && !isSelected && 'bg-primary/[0.07]',
-                        !isSelected && 'hover:bg-muted/50',
+                        'bg-muted py-1.5 sm:py-2 text-center text-[10px] sm:text-xs font-semibold text-muted-foreground',
+                        i < 6 && 'border-r border-border',
                       )}
                     >
-                      <span
-                        className={cn(
-                          'inline-flex items-center justify-center text-xs sm:text-sm font-medium',
-                          'w-5 h-5 sm:w-6 sm:h-6 rounded-full',
-                          today && 'bg-primary text-primary-foreground font-bold',
-                          isSelected && !today && 'bg-primary/15 text-primary font-semibold',
-                        )}
-                      >
-                        {format(day, 'd')}
-                      </span>
+                      <span className="sm:hidden">{d.short}</span>
+                      <span className="hidden sm:inline">{d.full}</span>
+                    </div>
+                  ))}
+                </div>
 
-                      {/* Mobile: status dots */}
-                      {dayBookings.length > 0 && (
-                        <div className="mt-1 flex flex-wrap gap-0.5 sm:hidden px-0.5">
-                          {dayBookings.slice(0, 4).map(b => (
-                            <span
-                              key={b.id}
-                              className={cn('w-1.5 h-1.5 rounded-full', statusDotClass(b.status))}
-                              aria-hidden
-                            />
-                          ))}
-                          {dayBookings.length > 4 && (
-                            <span className="text-[8px] text-muted-foreground leading-none">+</span>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Tablet+: booking pills */}
-                      <div className="mt-0.5 sm:mt-1 space-y-0.5 hidden sm:block">
-                        {dayBookings.slice(0, 2).map(b => {
-                          const pillLabel = b.isPairedEvent
-                            ? getPairedResourceLabel(b) || getCalendarBookingTitle(b, user, canViewAll)
-                            : getCalendarBookingTitle(b, user, canViewAll);
-                          return (
-                          <div
-                            key={b.id}
-                            className={cn(
-                              'text-[10px] md:text-[11px] px-1 py-0.5 rounded truncate leading-tight',
-                              b.isPairedEvent && 'ring-1 ring-inset ring-white/25',
-                              bookingStatusSolid[b.status] || 'bg-muted text-muted-foreground',
-                            )}
-                            title={b.isPairedEvent
-                              ? `${getCalendarBookingTitle(b, user, canViewAll)} · ${getPairedResourceLabel(b)}`
-                              : undefined}
-                          >
-                            {pillLabel}
-                          </div>
-                          );
-                        })}
-                        {dayBookings.length > 2 && (
-                          <p className="text-[10px] text-muted-foreground pl-1">
-                            +{dayBookings.length - 2} more
-                          </p>
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
+                <div className="divide-y divide-border">
+                  {calendarWeeks.map((weekDays, weekIndex) => (
+                    <MonthCalendarWeek
+                      key={weekIndex}
+                      weekDays={weekDays}
+                      bookings={monthVisibleBookings}
+                      currentDate={currentDate}
+                      selectedDay={selectedDay}
+                      onDaySelect={handleDaySelect}
+                      user={user}
+                      canViewAll={canViewAll}
+                    />
+                  ))}
+                </div>
               </div>
             </CardContent>
           </Card>

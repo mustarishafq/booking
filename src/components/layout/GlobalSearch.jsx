@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { format } from 'date-fns';
+import { format, isSameDay } from 'date-fns';
 import { BookOpen, Boxes, Loader2, Search } from 'lucide-react';
 import { db } from '@/api/base44Client';
 import { hasPermission } from '@/lib/permissions';
@@ -234,7 +234,14 @@ export default function GlobalSearch({ user }) {
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-medium">{booking.title || booking.resource_name || 'Booking'}</p>
                     <p className="text-xs text-muted-foreground truncate">
-                      {[booking.resource_name, booking.start_time ? format(new Date(booking.start_time), 'MMM d, yyyy') : null]
+                      {[
+                        booking.resource_name,
+                        booking.start_time
+                          ? (booking.end_time && !isSameDay(new Date(booking.start_time), new Date(booking.end_time))
+                            ? `${format(new Date(booking.start_time), 'MMM d')} – ${format(new Date(booking.end_time), 'MMM d, yyyy')}`
+                            : format(new Date(booking.start_time), 'MMM d, yyyy'))
+                          : null,
+                      ]
                         .filter(Boolean)
                         .join(' · ')}
                     </p>

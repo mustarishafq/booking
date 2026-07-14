@@ -14,6 +14,7 @@ import {
   navigateWeek,
   getBookingsForDay,
   getCalendarBookingTitle,
+  formatCalendarTimeRange,
   TIMELINE_START_HOUR,
   TIMELINE_END_HOUR,
   TIMELINE_HOUR_HEIGHT,
@@ -211,12 +212,12 @@ export default function CalendarWeekTimeline({
                               isSelected && 'ring-2 ring-primary ring-offset-1 ring-offset-background',
                             )}
                             style={{ top: position.top, height: position.height, minHeight: '1rem' }}
-                            title={`${label} · ${booking.resource_name || ''} · ${format(new Date(booking.start_time), 'h:mm a')} – ${format(new Date(booking.end_time), 'h:mm a')}`}
+                            title={`${label} · ${booking.resource_name || ''} · ${formatCalendarTimeRange(booking)}`}
                           >
                             <p className="text-[9px] sm:text-[10px] font-semibold truncate leading-tight">{label}</p>
                             <p className="text-[8px] sm:text-[9px] opacity-90 truncate hidden sm:block">{booking.resource_name}</p>
                             <p className="text-[8px] opacity-80 truncate hidden md:block">
-                              {format(new Date(booking.start_time), 'h:mm a')}
+                              {formatCalendarTimeRange(booking)}
                             </p>
                           </button>
                         );

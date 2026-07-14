@@ -2,7 +2,7 @@ import { db } from '@/api/base44Client';
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { addWeeks, format } from 'date-fns';
+import { addWeeks, format, isSameDay } from 'date-fns';
 import { toast } from 'sonner';
 import {
   Loader2, CalendarPlus, Pencil, Check, Search, Tag, ChevronLeft, ChevronRight, Link2, Zap,
@@ -422,9 +422,15 @@ export default function BookingModal({
   };
 
   const hasTimeRange = !!(form.start_time && form.end_time && new Date(form.end_time) > new Date(form.start_time));
-  const formattedRange = hasTimeRange
-    ? `${format(new Date(form.start_time), 'MMM d, h:mm a')} – ${format(new Date(form.end_time), 'h:mm a')}`
-    : '';
+  const formattedRange = (() => {
+    if (!hasTimeRange) return '';
+    const start = new Date(form.start_time);
+    const end = new Date(form.end_time);
+    if (isSameDay(start, end)) {
+      return `${format(start, 'MMM d, h:mm a')} – ${format(end, 'h:mm a')}`;
+    }
+    return `${format(start, 'MMM d, h:mm a')} – ${format(end, 'MMM d, h:mm a')}`;
+  })();
 
   const availabilityExcludeIds = useMemo(
     () => (isEdit ? [booking?.id, pairedSibling?.id].filter(Boolean) : []),

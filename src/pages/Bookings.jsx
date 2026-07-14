@@ -5,7 +5,7 @@ import { useOutletContext, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
-import { isToday, isTomorrow, isThisWeek, compareAsc } from 'date-fns';
+import { isTomorrow, isThisWeek, compareAsc, startOfDay, addDays } from 'date-fns';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,6 +16,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { hasPermission, isInternalUser } from '@/lib/permissions';
 import { collapsePairedBookings, isBookingEditable } from '@/lib/bookingUtils';
+import { bookingOverlapsRange } from '@/lib/calendarUtils';
 import EmptyState from '@/components/ui/EmptyState';
 import BookingListItem from '@/components/bookings/BookingListItem';
 import ConfirmActionDialog from '@/components/ui/ConfirmActionDialog';
@@ -108,6 +109,8 @@ function groupBookingsByDate(bookings, viewTab) {
   };
 
   const now = new Date();
+  const todayStart = startOfDay(now);
+  const todayEnd = addDays(todayStart, 1);
   bookings.forEach((b) => {
     const start = new Date(b.start_time);
     const end = new Date(b.end_time);
@@ -115,7 +118,7 @@ function groupBookingsByDate(bookings, viewTab) {
       groups.past.push(b);
       return;
     }
-    if (isToday(start)) groups.today.push(b);
+    if (bookingOverlapsRange(b, todayStart, todayEnd)) groups.today.push(b);
     else if (isTomorrow(start)) groups.tomorrow.push(b);
     else if (isThisWeek(start, { weekStartsOn: 1 })) groups.thisWeek.push(b);
     else groups.later.push(b);

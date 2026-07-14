@@ -16,6 +16,7 @@ import {
   getCalendarBookingTitle,
   canViewCalendarBookingDetails,
   isOwnBooking,
+  formatCalendarTimeRange,
   TIMELINE_START_HOUR,
   TIMELINE_END_HOUR,
 } from '@/lib/calendarUtils';
@@ -195,13 +196,13 @@ export default function CalendarTimeline({
                                 isSelected && 'ring-2 ring-primary ring-offset-1 ring-offset-background',
                               )}
                               style={{ left: position.left, width: position.width, minWidth: '1.5rem' }}
-                              title={`${label} · ${format(new Date(booking.start_time), 'h:mm a')} – ${format(new Date(booking.end_time), 'h:mm a')}`}
+                              title={`${label} · ${formatCalendarTimeRange(booking)}`}
                             >
                               <p className="text-[9px] sm:text-[10px] md:text-xs font-semibold truncate leading-tight">
                                 {label}
                               </p>
                               <p className="text-[8px] sm:text-[9px] md:text-[10px] opacity-90 truncate hidden sm:block">
-                                {format(new Date(booking.start_time), 'h:mm a')} – {format(new Date(booking.end_time), 'h:mm a')}
+                                {formatCalendarTimeRange(booking)}
                               </p>
                             </button>
                           );
@@ -358,7 +359,7 @@ export function CalendarDayDetailContent({
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <Clock className="w-3 h-3 shrink-0" />
               <span>
-                {format(new Date(b.start_time), 'h:mm a')} – {format(new Date(b.end_time), 'h:mm a')}
+                {formatCalendarTimeRange(b)}
               </span>
             </div>
 

@@ -2,11 +2,20 @@ import { Link } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { format } from 'date-fns';
+import { format, isSameDay } from 'date-fns';
 import { Clock, MapPin, User, ArrowRight } from 'lucide-react';
 import { bookingStatusBadge } from '@/lib/bookingUtils';
 import EmptyState from '@/components/ui/EmptyState';
 import { cn } from '@/lib/utils';
+
+function bookingDateLabel(booking) {
+  const start = new Date(booking.start_time);
+  const end = new Date(booking.end_time);
+  if (isSameDay(start, end)) {
+    return format(start, 'MMM d, h:mm a');
+  }
+  return `${format(start, 'MMM d, h:mm a')} – ${format(end, 'MMM d, h:mm a')}`;
+}
 
 export default function RecentBookings({
   bookings,
@@ -51,7 +60,7 @@ export default function RecentBookings({
                     <div className="flex items-center gap-1.5 sm:gap-2 mt-0.5 flex-wrap">
                       <Clock className="w-3 h-3 text-muted-foreground shrink-0" />
                       <span className="text-xs text-muted-foreground">
-                        {format(new Date(booking.start_time), 'MMM d, h:mm a')}
+                        {bookingDateLabel(booking)}
                       </span>
                       {showBooker && booking.booked_by_name && (
                         <>

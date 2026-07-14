@@ -1,16 +1,18 @@
 import {
-  isSameDay,
   differenceInMinutes,
   setHours,
   setMinutes,
   startOfDay,
+  startOfMonth,
+  endOfMonth,
   addDays,
   subDays,
   startOfWeek,
   endOfWeek,
   addWeeks,
   subWeeks,
-  isWithinInterval,
+  isSameDay,
+  format,
 } from 'date-fns';
 
 export const TIMELINE_START_HOUR = 6;
@@ -50,8 +52,33 @@ export function filterCalendarBookings(bookings, { roomFilter = 'all' } = {}) {
   return list;
 }
 
+/** True when [booking.start_time, booking.end_time) overlaps [rangeStart, rangeEnd]. */
+export function bookingOverlapsRange(booking, rangeStart, rangeEnd) {
+  return new Date(booking.start_time) < rangeEnd && new Date(booking.end_time) > rangeStart;
+}
+
+/** Bookings active on this calendar day (including multi-day spans). */
 export function getBookingsForDay(bookings, date) {
-  return bookings.filter(b => isSameDay(new Date(b.start_time), date));
+  const dayStart = startOfDay(date);
+  const dayEnd = addDays(dayStart, 1);
+  return bookings.filter(b => bookingOverlapsRange(b, dayStart, dayEnd));
+}
+
+/** Bookings that overlap any day in the given month. */
+export function getBookingsInMonth(bookings, monthDate) {
+  const start = startOfMonth(monthDate);
+  const end = endOfMonth(monthDate);
+  return bookings.filter(b => bookingOverlapsRange(b, start, end));
+}
+
+/** Compact time range for calendar blocks; includes dates when multi-day. */
+export function formatCalendarTimeRange(booking) {
+  const start = new Date(booking.start_time);
+  const end = new Date(booking.end_time);
+  if (isSameDay(start, end)) {
+    return `${format(start, 'h:mm a')} – ${format(end, 'h:mm a')}`;
+  }
+  return `${format(start, 'MMM d, h:mm a')} – ${format(end, 'MMM d, h:mm a')}`;
 }
 
 export function getWeekDays(date) {
@@ -141,8 +168,6 @@ export function getBookingTimelinePosition(booking, date, startHour = TIMELINE_S
 }
 
 export function getWeekBookingPosition(booking, day, startHour = TIMELINE_START_HOUR, endHour = TIMELINE_END_HOUR) {
-  if (!isSameDay(new Date(booking.start_time), day)) return null;
-
   const { start: windowStart, end: windowEnd, totalMinutes } = getTimelineWindow(day, startHour, endHour);
   const bookingStart = new Date(booking.start_time);
   const bookingEnd = new Date(booking.end_time);
@@ -154,7 +179,6 @@ export function getWeekBookingPosition(booking, day, startHour = TIMELINE_START_
 
   const topMinutes = differenceInMinutes(effectiveStart, windowStart);
   const heightMinutes = differenceInMinutes(effectiveEnd, effectiveStart);
-  const totalHours = endHour - startHour;
 
   return {
     top: `${(topMinutes / totalMinutes) * 100}%`,
@@ -214,9 +238,86 @@ export function bookingOverlapsSlot(bookings, resourceId, start, end, excludeId)
 export function getBookingsInWeek(bookings, weekDate) {
   const start = startOfWeek(weekDate);
   const end = endOfWeek(weekDate);
-  return bookings.filter(b =>
-    isWithinInterval(new Date(b.start_time), { start, end }),
-  );
+  return bookings.filter(b => bookingOverlapsRange(b, start, end));
+}
+
+/**
+ * Lay out multi-day booking bars for one calendar week (Sun–Sat).
+ * Returns positioned segments that can span consecutive day columns.
+ */
+export function layoutMonthWeekBars(bookings, weekDays, { maxLanes = 2 } = {}) {
+  if (!weekDays?.length) return { bars: [], overflowByDay: Array(7).fill(0) };
+
+  const weekStart = startOfDay(weekDays[0]);
+  const weekEndExclusive = addDays(startOfDay(weekDays[weekDays.length - 1]), 1);
+
+  const candidates = [];
+  for (const booking of bookings) {
+    if (!bookingOverlapsRange(booking, weekStart, weekEndExclusive)) continue;
+
+    let startCol = -1;
+    let endCol = -1;
+    for (let i = 0; i < weekDays.length; i += 1) {
+      const dayStart = startOfDay(weekDays[i]);
+      const dayEnd = addDays(dayStart, 1);
+      if (bookingOverlapsRange(booking, dayStart, dayEnd)) {
+        if (startCol === -1) startCol = i;
+        endCol = i;
+      }
+    }
+    if (startCol === -1) continue;
+
+    const bookingStart = new Date(booking.start_time);
+    const bookingEnd = new Date(booking.end_time);
+    const afterSegmentEnd = addDays(startOfDay(weekDays[endCol]), 1);
+    candidates.push({
+      booking,
+      startCol,
+      endCol,
+      span: endCol - startCol + 1,
+      isStart: isSameDay(bookingStart, weekDays[startCol]),
+      isEnd: !bookingOverlapsRange(booking, afterSegmentEnd, addDays(afterSegmentEnd, 1)),
+      continuesBefore: bookingStart < weekStart,
+      continuesAfter: bookingEnd > weekEndExclusive,
+    });
+  }
+
+  candidates.sort((a, b) => {
+    if (a.startCol !== b.startCol) return a.startCol - b.startCol;
+    if (b.span !== a.span) return b.span - a.span;
+    return new Date(a.booking.start_time) - new Date(b.booking.start_time);
+  });
+
+  const laneEnds = Array.from({ length: maxLanes }, () => -1);
+  const bars = [];
+  const overflowByDay = Array(7).fill(0);
+
+  for (const item of candidates) {
+    let lane = -1;
+    for (let i = 0; i < maxLanes; i += 1) {
+      if (laneEnds[i] < item.startCol) {
+        lane = i;
+        break;
+      }
+    }
+    if (lane === -1) {
+      for (let d = item.startCol; d <= item.endCol; d += 1) overflowByDay[d] += 1;
+      continue;
+    }
+    laneEnds[lane] = item.endCol;
+    bars.push({
+      id: item.booking.id,
+      booking: item.booking,
+      lane,
+      startCol: item.startCol,
+      span: item.span,
+      isStart: item.isStart,
+      isEnd: item.isEnd,
+      showLabel: item.isStart || item.continuesBefore,
+    });
+  }
+
+  return { bars, overflowByDay };
 }
 
 export function dragPreviewStyle(anchorPct, currentPct) {
