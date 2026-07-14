@@ -102,7 +102,7 @@ export default function CalendarView() {
 
   const { data: bookings = [] } = useQuery({
     queryKey: ['bookings'],
-    queryFn: () => db.entities.Booking.list('-start_time', 200),
+    queryFn: () => db.entities.Booking.list('-start_time', 10000),
   });
 
   const { data: resources = [] } = useQuery({

@@ -11,6 +11,15 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from '@/components/ui/pagination';
+import {
   Plus, Search, Calendar, BookOpen, X, AlertCircle, History, LayoutList,
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -25,6 +34,24 @@ import { cn } from '@/lib/utils';
 
 const HISTORY_STATUSES = new Set(['completed', 'cancelled', 'rejected']);
 const STATUS_OPTIONS = ['all', 'confirmed', 'pending', 'cancelled', 'rejected', 'completed'];
+const PAGE_SIZE = 20;
+
+function getPageNumbers(current, total) {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+
+  const pages = new Set([1, total, current]);
+  for (let p = current - 1; p <= current + 1; p += 1) {
+    if (p >= 1 && p <= total) pages.add(p);
+  }
+
+  const sorted = [...pages].sort((a, b) => a - b);
+  const result = [];
+  for (let i = 0; i < sorted.length; i += 1) {
+    if (i > 0 && sorted[i] - sorted[i - 1] > 1) result.push('ellipsis');
+    result.push(sorted[i]);
+  }
+  return result;
+}
 
 const CONFIRM_COPY = {
   approve: {
@@ -151,11 +178,16 @@ export default function Bookings() {
   ));
   const [confirmAction, setConfirmAction] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     const q = searchParams.get('search');
     if (q) setSearch(q);
   }, [searchParams]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter, userFilter, viewTab]);
 
   const canViewAll = hasPermission(user, 'view_all_bookings');
   const canManage = hasPermission(user, 'manage_bookings');
@@ -164,7 +196,8 @@ export default function Bookings() {
 
   const { data: bookings = [], isLoading } = useQuery({
     queryKey: ['bookings'],
-    queryFn: () => db.entities.Booking.list('-start_time', 200),
+    // Include migrated history (~3.7k+); former limit of 200 hid older completed rows
+    queryFn: () => db.entities.Booking.list('-start_time', 10000),
   });
 
   const { data: resources = [] } = useQuery({
@@ -251,9 +284,24 @@ export default function Bookings() {
       });
   }, [collapsedVisibleBookings, userFilter, statusFilter, viewTab, search]);
 
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pageStart = filtered.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
+  const pageEnd = Math.min(currentPage * PAGE_SIZE, filtered.length);
+
+  const paginated = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return filtered.slice(start, start + PAGE_SIZE);
+  }, [filtered, currentPage]);
+
   const grouped = useMemo(
-    () => groupBookingsByDate(filtered, viewTab),
-    [filtered, viewTab],
+    () => groupBookingsByDate(paginated, viewTab),
+    [paginated, viewTab],
+  );
+
+  const pageNumbers = useMemo(
+    () => getPageNumbers(currentPage, totalPages),
+    [currentPage, totalPages],
   );
 
   const hasActiveFilters = search.trim() !== '' || statusFilter !== 'all' || userFilter !== 'all';
@@ -262,6 +310,11 @@ export default function Bookings() {
     setSearch('');
     setStatusFilter('all');
     setUserFilter('all');
+  };
+
+  const goToPage = (nextPage) => {
+    setPage(Math.min(Math.max(1, nextPage), totalPages));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const selectUpcoming = () => { setViewTab('upcoming'); setStatusFilter('all'); };
@@ -357,9 +410,11 @@ export default function Bookings() {
 
   const subtitle = isLoading
     ? 'Loading bookings…'
-    : `${filtered.length} booking${filtered.length !== 1 ? 's' : ''}${
-      userFilter !== 'all' ? ` · ${bookers.find(b => b.email === userFilter)?.name || userFilter}` : ''
-    }`;
+    : filtered.length === 0
+      ? '0 bookings'
+      : `Showing ${pageStart}–${pageEnd} of ${filtered.length} booking${filtered.length !== 1 ? 's' : ''}${
+        userFilter !== 'all' ? ` · ${bookers.find(b => b.email === userFilter)?.name || userFilter}` : ''
+      }`;
 
   return (
     <div className="space-y-5">
@@ -557,6 +612,66 @@ export default function Bookings() {
               </motion.div>
             </section>
           ))}
+
+          {totalPages > 1 && (
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-1">
+              <p className="text-xs text-muted-foreground text-center sm:text-left tabular-nums">
+                Page {currentPage} of {totalPages}
+              </p>
+              <Pagination className="mx-0 w-auto justify-center sm:justify-end">
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious
+                      href="#"
+                      aria-disabled={currentPage <= 1}
+                      className={cn(
+                        currentPage <= 1 && 'pointer-events-none opacity-40',
+                        'max-sm:px-2.5 max-sm:[&>span]:hidden',
+                      )}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        if (currentPage > 1) goToPage(currentPage - 1);
+                      }}
+                    />
+                  </PaginationItem>
+                  {pageNumbers.map((item, index) => (
+                    item === 'ellipsis' ? (
+                      <PaginationItem key={`ellipsis-${index}`}>
+                        <PaginationEllipsis />
+                      </PaginationItem>
+                    ) : (
+                      <PaginationItem key={item}>
+                        <PaginationLink
+                          href="#"
+                          isActive={item === currentPage}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            goToPage(item);
+                          }}
+                        >
+                          {item}
+                        </PaginationLink>
+                      </PaginationItem>
+                    )
+                  ))}
+                  <PaginationItem>
+                    <PaginationNext
+                      href="#"
+                      aria-disabled={currentPage >= totalPages}
+                      className={cn(
+                        currentPage >= totalPages && 'pointer-events-none opacity-40',
+                        'max-sm:px-2.5 max-sm:[&>span]:hidden',
+                      )}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        if (currentPage < totalPages) goToPage(currentPage + 1);
+                      }}
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            </div>
+          )}
         </div>
       )}
 

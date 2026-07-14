@@ -80,7 +80,7 @@ export default function GlobalSearch({ user }) {
 
   const bookingsQuery = useQuery({
     queryKey: ['bookings'],
-    queryFn: () => db.entities.Booking.list('-start_time', 200),
+    queryFn: () => db.entities.Booking.list('-start_time', 10000),
     enabled: open && canViewBookings,
   });
 

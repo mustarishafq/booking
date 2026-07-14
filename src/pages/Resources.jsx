@@ -67,7 +67,7 @@ export default function Resources() {
 
   const { data: bookings = [] } = useQuery({
     queryKey: ['bookings', 'resource-exp'],
-    queryFn: () => db.entities.Booking.list('-start_time', 2000),
+    queryFn: () => db.entities.Booking.list('-start_time', 10000),
   });
 
   const bookingCounts = useMemo(

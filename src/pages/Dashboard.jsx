@@ -74,7 +74,7 @@ export default function Dashboard() {
 
   const { data: bookings = [], isLoading: bookingsLoading } = useQuery({
     queryKey: ['bookings'],
-    queryFn: () => db.entities.Booking.list('-start_time', 100),
+    queryFn: () => db.entities.Booking.list('-start_time', 10000),
   });
 
   const { data: transactions = [] } = useQuery({

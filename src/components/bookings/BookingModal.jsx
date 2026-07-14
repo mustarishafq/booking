@@ -265,7 +265,7 @@ export default function BookingModal({
 
   const { data: expBookings = [] } = useQuery({
     queryKey: ['bookings', 'resource-exp'],
-    queryFn: () => db.entities.Booking.list('-start_time', 2000),
+    queryFn: () => db.entities.Booking.list('-start_time', 10000),
     enabled: open,
   });
 
