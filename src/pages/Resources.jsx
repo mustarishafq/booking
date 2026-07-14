@@ -56,7 +56,7 @@ export default function Resources() {
   const [searchParams] = useSearchParams();
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('active');
   const [showForm, setShowForm] = useState(false);
   const [editResource, setEditResource] = useState(null);
 
@@ -96,19 +96,24 @@ export default function Resources() {
     return counts;
   }, [resources]);
 
-  const filtered = useMemo(() => resources.filter(r => {
-    const q = search.toLowerCase().trim();
-    const matchSearch = !q
-      || r.name?.toLowerCase().includes(q)
-      || r.resource_type?.toLowerCase().includes(q)
-      || r.location?.toLowerCase().includes(q)
-      || r.pic_name?.toLowerCase().includes(q);
-    const matchType = typeFilter === 'all' || r.resource_type === typeFilter;
-    const matchStatus = statusFilter === 'all' || r.status === statusFilter;
-    return matchSearch && matchType && matchStatus;
-  }), [resources, search, typeFilter, statusFilter]);
+  const filtered = useMemo(() => {
+    const STATUS_ORDER = { active: 0, maintenance: 1, inactive: 2 };
+    return resources
+      .filter(r => {
+        const q = search.toLowerCase().trim();
+        const matchSearch = !q
+          || r.name?.toLowerCase().includes(q)
+          || r.resource_type?.toLowerCase().includes(q)
+          || r.location?.toLowerCase().includes(q)
+          || r.pic_name?.toLowerCase().includes(q);
+        const matchType = typeFilter === 'all' || r.resource_type === typeFilter;
+        const matchStatus = statusFilter === 'all' || r.status === statusFilter;
+        return matchSearch && matchType && matchStatus;
+      })
+      .sort((a, b) => (STATUS_ORDER[a.status] ?? 1) - (STATUS_ORDER[b.status] ?? 1));
+  }, [resources, search, typeFilter, statusFilter]);
 
-  const hasActiveFilters = search.trim() !== '' || typeFilter !== 'all' || statusFilter !== 'all';
+  const hasActiveFilters = search.trim() !== '' || typeFilter !== 'all' || statusFilter !== 'active';
   const canManage = hasPermission(user, 'manage_resources');
   const isAdmin = user?.role === 'admin';
   const isInternal = user?.user_type === 'internal';
@@ -118,7 +123,7 @@ export default function Resources() {
   const clearFilters = () => {
     setSearch('');
     setTypeFilter('all');
-    setStatusFilter('all');
+    setStatusFilter('active');
   };
 
   useEffect(() => {
