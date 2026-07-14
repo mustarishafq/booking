@@ -2,6 +2,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { Sun } from 'lucide-react';
 import AppLogo from './AppLogo';
 import ThemeToggle from './ThemeToggle';
+import UserAvatar from '@/components/UserAvatar';
 import { cn } from '@/lib/utils';
 import { hasPermission } from '@/lib/permissions';
 import { buildMobileMoreItems, isNavActive } from '@/lib/navigation';
@@ -18,10 +19,11 @@ function formatBadgeCount(count) {
   return count > 99 ? '99+' : count;
 }
 
-function MoreGridItem({ item, pathname, unreadCount, onNavigate }) {
+function MoreGridItem({ item, pathname, unreadCount, onNavigate, user }) {
   const Icon = item.icon;
   const active = isNavActive(item, pathname);
   const showBadge = item.badgeKey === 'notifications' && unreadCount > 0;
+  const isProfile = item.path === '/profile';
 
   return (
     <Link
@@ -35,7 +37,11 @@ function MoreGridItem({ item, pathname, unreadCount, onNavigate }) {
       )}
     >
       <span className="relative">
-        <Icon className="h-5 w-5" />
+        {isProfile && user ? (
+          <UserAvatar user={user} size="xs" className="h-5 w-5" rounded={false} />
+        ) : (
+          <Icon className="h-5 w-5" />
+        )}
         {showBadge && (
           <span className="absolute -right-2 -top-1.5 min-w-[16px] h-4 rounded-full bg-destructive px-1 text-[9px] font-bold leading-4 text-destructive-foreground text-center">
             {formatBadgeCount(unreadCount)}
@@ -47,7 +53,7 @@ function MoreGridItem({ item, pathname, unreadCount, onNavigate }) {
   );
 }
 
-function MoreGrid({ title, items, pathname, unreadCount, onNavigate }) {
+function MoreGrid({ title, items, pathname, unreadCount, onNavigate, user }) {
   if (items.length === 0) return null;
 
   return (
@@ -65,6 +71,7 @@ function MoreGrid({ title, items, pathname, unreadCount, onNavigate }) {
             pathname={pathname}
             unreadCount={unreadCount}
             onNavigate={onNavigate}
+            user={user}
           />
         ))}
       </div>
@@ -105,6 +112,7 @@ export default function MobileMoreMenu({ user, open, onOpenChange }) {
             pathname={pathname}
             unreadCount={unread.count}
             onNavigate={close}
+            user={user}
           />
           <MoreGrid
             title="Admin"
@@ -112,6 +120,7 @@ export default function MobileMoreMenu({ user, open, onOpenChange }) {
             pathname={pathname}
             unreadCount={unread.count}
             onNavigate={close}
+            user={user}
           />
         </nav>
 

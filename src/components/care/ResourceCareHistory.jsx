@@ -5,9 +5,10 @@ import { Button } from '@/components/ui/button';
 import {
   Collapsible, CollapsibleContent, CollapsibleTrigger,
 } from '@/components/ui/collapsible';
-import { History, ChevronDown, User } from 'lucide-react';
+import { History, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatCareCompletedAt } from '@/lib/resourceCareUtils';
+import { UserIdentity } from '@/components/UserAvatar';
 import CareHistoryProofDialog, { CareHistoryProofThumb } from '@/components/care/CareHistoryProofDialog';
 
 export default function ResourceCareHistory({ resourceId }) {
@@ -60,12 +61,13 @@ export default function ResourceCareHistory({ resourceId }) {
                   </div>
 
                   {(entry.completed_by_name || entry.completed_by_email) && (
-                    <p className="text-xs text-muted-foreground flex items-center gap-1">
-                      <User className="w-3 h-3 shrink-0" />
-                      <span className="truncate">
-                        {entry.completed_by_name?.trim() || entry.completed_by_email}
-                      </span>
-                    </p>
+                    <UserIdentity
+                      name={entry.completed_by_name}
+                      email={entry.completed_by_email}
+                      avatarUrl={entry.completed_by_avatar_url}
+                      className="text-xs text-muted-foreground"
+                      labelClassName="text-xs text-muted-foreground"
+                    />
                   )}
 
                   {entry.usage_reading != null && (

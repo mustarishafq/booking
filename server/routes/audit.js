@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import pool from '../db.js';
 import { requireAdmin } from '../middleware/auth.js';
+import { resolveAvatarUrl } from '../avatar.js';
 
 const router = Router();
 
@@ -10,23 +11,31 @@ router.get('/', requireAdmin, async (req, res) => {
     const offset = Math.max(parseInt(req.query.offset || '0', 10) || 0, 0);
     const { action, entity_type: entityType, actor_email: actorEmail } = req.query;
 
-    let sql = 'SELECT * FROM audit_logs WHERE 1=1';
+    let sql = `
+      SELECT a.*, u.full_name AS actor_name, u.avatar_url AS actor_avatar_url
+      FROM audit_logs a
+      LEFT JOIN users u ON (
+        (a.actor_id IS NOT NULL AND u.id = a.actor_id)
+        OR (a.actor_id IS NULL AND a.actor_email IS NOT NULL AND u.email = a.actor_email)
+      )
+      WHERE 1=1
+    `;
     const params = [];
 
     if (action) {
-      sql += ' AND action = ?';
+      sql += ' AND a.action = ?';
       params.push(action);
     }
     if (entityType) {
-      sql += ' AND entity_type = ?';
+      sql += ' AND a.entity_type = ?';
       params.push(entityType);
     }
     if (actorEmail) {
-      sql += ' AND actor_email = ?';
+      sql += ' AND a.actor_email = ?';
       params.push(String(actorEmail).toLowerCase());
     }
 
-    sql += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
+    sql += ' ORDER BY a.created_at DESC LIMIT ? OFFSET ?';
     params.push(limit, offset);
 
     const [rows] = await pool.query(sql, params);
@@ -51,6 +60,7 @@ router.get('/', requireAdmin, async (req, res) => {
     res.json({
       logs: rows.map(row => ({
         ...row,
+        actor_avatar_url: resolveAvatarUrl(row.actor_avatar_url),
         metadata: row.metadata
           ? (typeof row.metadata === 'string' ? JSON.parse(row.metadata) : row.metadata)
           : null,

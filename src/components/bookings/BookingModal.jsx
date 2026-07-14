@@ -6,8 +6,9 @@ import { addWeeks, format, isSameDay } from 'date-fns';
 import { toast } from 'sonner';
 import {
   Loader2, CalendarPlus, Pencil, Check, Search, Tag, ChevronLeft, ChevronRight, Link2, Zap,
-  Phone, UserRound, Clock,
+  Phone, Clock,
 } from 'lucide-react';
+import { UserIdentity } from '@/components/UserAvatar';
 
 import {
   Dialog,
@@ -208,8 +209,12 @@ function ResourcePicContact({ resource }) {
           className="inline-flex items-center gap-1 min-w-0"
           title={resource.pic_email && resource.pic_name ? resource.pic_email : undefined}
         >
-          <UserRound className="w-3 h-3 shrink-0" />
-          <span className="truncate">{picLabel}</span>
+          <UserIdentity
+            name={resource.pic_name}
+            email={resource.pic_email}
+            avatarUrl={resource.pic_avatar_url}
+            labelClassName="text-[11px] text-muted-foreground"
+          />
         </span>
       ) : null}
       {callHref ? (

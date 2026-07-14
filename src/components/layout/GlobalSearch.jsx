@@ -6,7 +6,7 @@ import { BookOpen, Boxes, Loader2, Search } from 'lucide-react';
 import { db } from '@/api/base44Client';
 import { hasPermission } from '@/lib/permissions';
 import { useGlobalSearchShortcut } from '@/hooks/useGlobalSearchShortcut';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import UserAvatar, { UserIdentity } from '@/components/UserAvatar';
 import { Badge } from '@/components/ui/badge';
 import {
   CommandDialog,
@@ -34,13 +34,6 @@ function useDebouncedValue(value, delay = DEBOUNCE_MS) {
 
 function matchesQuery(value, query) {
   return value?.toLowerCase().includes(query.toLowerCase());
-}
-
-function getInitials(name, email) {
-  if (name) {
-    return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
-  }
-  return (email?.[0] || 'U').toUpperCase();
 }
 
 export function GlobalSearchTrigger({ onClick, className }) {
@@ -245,6 +238,15 @@ export default function GlobalSearch({ user }) {
                         .filter(Boolean)
                         .join(' · ')}
                     </p>
+                    {booking.booked_by_email && (
+                      <UserIdentity
+                        name={booking.booked_by_name}
+                        email={booking.booked_by_email}
+                        avatarUrl={booking.booked_by_avatar_url}
+                        className="mt-1"
+                        labelClassName="text-[11px] text-muted-foreground"
+                      />
+                    )}
                   </div>
                   {booking.status && (
                     <Badge variant="secondary" className="capitalize shrink-0 text-[10px]">
@@ -265,11 +267,7 @@ export default function GlobalSearch({ user }) {
                   onSelect={() => closeAndNavigate(`/users?search=${encodeURIComponent(resultUser.email || trimmedQuery)}`)}
                   className="gap-3"
                 >
-                  <Avatar className="h-8 w-8 shrink-0">
-                    <AvatarFallback className="bg-primary/10 text-xs font-semibold text-primary">
-                      {getInitials(resultUser.full_name, resultUser.email)}
-                    </AvatarFallback>
-                  </Avatar>
+                  <UserAvatar user={resultUser} size="sm" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-medium">{resultUser.full_name || resultUser.email}</p>
                     <p className="text-xs text-muted-foreground truncate">{resultUser.email}</p>

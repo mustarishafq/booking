@@ -10,9 +10,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import EmptyState from '@/components/ui/EmptyState';
 import {
-  History, User, MapPin, CheckCircle2, ImageIcon, Calendar, StickyNote,
+  History, MapPin, CheckCircle2, ImageIcon, Calendar, StickyNote,
 } from 'lucide-react';
 import { careCategoryLabel, formatCareCompletedAt } from '@/lib/resourceCareUtils';
+import { UserIdentity } from '@/components/UserAvatar';
 import { cn } from '@/lib/utils';
 import CareHistoryProofDialog, { CareHistoryProofThumb, CareHistoryDateCell } from '@/components/care/CareHistoryProofDialog';
 
@@ -39,7 +40,6 @@ function HistoryStatPill({ icon: Icon, label, value, color = 'primary' }) {
 
 function HistoryCard({ entry, onProofClick }) {
   const hasProof = Boolean(entry.proof_image_url);
-  const completedBy = entry.completed_by_name?.trim() || entry.completed_by_email;
   const completedDate = entry.completed_at ? new Date(entry.completed_at) : null;
   const dateLabel = completedDate && !Number.isNaN(completedDate.getTime())
     ? format(completedDate, 'MMM d, yyyy')
@@ -101,10 +101,13 @@ function HistoryCard({ entry, onProofClick }) {
           </div>
           <div className="col-span-2 space-y-0.5">
             <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Completed by</p>
-            <p className="text-xs text-foreground flex items-center gap-1.5">
-              <User className="w-3 h-3 shrink-0 text-muted-foreground" />
-              <span className="truncate">{completedBy || '—'}</span>
-            </p>
+            <UserIdentity
+              name={entry.completed_by_name}
+              email={entry.completed_by_email}
+              avatarUrl={entry.completed_by_avatar_url}
+              className="text-xs text-foreground"
+              labelClassName="text-xs text-foreground"
+            />
           </div>
         </div>
 
@@ -264,10 +267,13 @@ export default function CareScheduleHistory({ filters }) {
                       </div>
                     </TableCell>
                     <TableCell className="text-sm max-w-[140px]">
-                      <span className="flex items-center gap-1.5 truncate">
-                        <User className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
-                        {entry.completed_by_name?.trim() || entry.completed_by_email || '—'}
-                      </span>
+                      <UserIdentity
+                        name={entry.completed_by_name}
+                        email={entry.completed_by_email}
+                        avatarUrl={entry.completed_by_avatar_url}
+                        className="truncate"
+                        labelClassName="text-sm"
+                      />
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground max-w-[200px]">
                       <span className="line-clamp-2">{entry.notes?.trim() || '—'}</span>

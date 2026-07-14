@@ -4,10 +4,9 @@ import bcrypt from 'bcryptjs';
 import pool from '../db.js';
 import { requireAdmin } from '../middleware/auth.js';
 import { writeAuditLog, slimRow, entitySummary } from '../audit.js';
+import { serializeUser } from '../avatar.js';
 
 const router = Router();
-
-const safeUser = ({ password_hash, ...u }) => u;
 
 async function createUserRecord({
   email,
@@ -121,7 +120,7 @@ router.get('/', requireAdmin, async (req, res) => {
       LEFT JOIN roles r ON u.role_id = r.id
       ORDER BY u.created_at DESC
     `);
-    res.json(rows.map(safeUser));
+    res.json(rows.map(serializeUser));
   } catch (e) {
     res.status(500).json({ message: e.message });
   }
@@ -170,7 +169,7 @@ router.post('/', requireAdmin, async (req, res) => {
     }).catch(() => {});
 
     res.status(201).json({
-      user: safeUser(user),
+      user: serializeUser(user),
       ...(tempPassword ? { tempPassword } : {}),
       message: tempPassword
         ? 'User created. Share the temporary password with the user.'
@@ -189,7 +188,7 @@ router.patch('/:id', requireAdmin, async (req, res) => {
     const { password_hash, ...updates } = req.body;
     if (!Object.keys(updates).length) {
       const [rows] = await pool.query('SELECT * FROM users WHERE id = ?', [req.params.id]);
-      return res.json(safeUser(rows[0] || {}));
+      return res.json(serializeUser(rows[0] || {}));
     }
     const [beforeRows] = await pool.query('SELECT * FROM users WHERE id = ?', [req.params.id]);
     const before = beforeRows[0];
@@ -212,7 +211,7 @@ router.patch('/:id', requireAdmin, async (req, res) => {
       },
     }).catch(() => {});
 
-    res.json(safeUser(after));
+    res.json(serializeUser(after));
   } catch (e) {
     res.status(500).json({ message: e.message });
   }
@@ -241,7 +240,7 @@ router.post('/invite', requireAdmin, async (req, res) => {
     res.status(201).json({
       email: user.email,
       tempPassword,
-      user: safeUser(user),
+      user: serializeUser(user),
       message: 'User created. Share the temporary password with the user.',
     });
   } catch (e) {
@@ -264,7 +263,7 @@ router.post('/:id/approve', requireAdmin, async (req, res) => {
       metadata: { after: slimRow('users', rows[0]) },
     }).catch(() => {});
 
-    res.json(safeUser(rows[0]));
+    res.json(serializeUser(rows[0]));
   } catch (e) {
     res.status(500).json({ message: e.message });
   }

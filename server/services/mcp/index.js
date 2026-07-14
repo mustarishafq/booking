@@ -23,6 +23,7 @@ import {
 } from '../../notifications.js';
 import { sendBookingWebhook } from '../../webhooks.js';
 import { writeAuditLog, slimRow, entitySummary } from '../../audit.js';
+import { resolveAvatarUrl } from '../../avatar.js';
 import {
   parseEntityRow,
   serializeResource,
@@ -87,7 +88,7 @@ async function enrichResourceRows(rows) {
   if (userIds.length) {
     const placeholders = userIds.map(() => '?').join(', ');
     const [users] = await pool.query(
-      `SELECT id, email, full_name FROM users WHERE id IN (${placeholders})`,
+      `SELECT id, email, full_name, avatar_url FROM users WHERE id IN (${placeholders})`,
       userIds,
     );
     userById = Object.fromEntries(users.map((u) => [u.id, u]));
@@ -100,6 +101,7 @@ async function enrichResourceRows(rows) {
       ...r,
       pic_email: pic?.email || null,
       pic_name,
+      pic_avatar_url: resolveAvatarUrl(pic?.avatar_url),
     };
   });
 }

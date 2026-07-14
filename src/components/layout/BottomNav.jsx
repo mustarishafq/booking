@@ -8,16 +8,18 @@ import { useUnreadNotificationCount } from '@/hooks/useNotifications';
 import { useIsMobile } from '@/hooks/use-mobile';
 import BookOrbNavItem from './BookOrbNavItem';
 import MobileMoreMenu from './MobileMoreMenu';
+import UserAvatar from '@/components/UserAvatar';
 
 function formatBadgeCount(count) {
   return count > 99 ? '99+' : count;
 }
 
-function DockNavItem({ item, pathname, unreadCount, className, onClick }) {
+function DockNavItem({ item, pathname, unreadCount, className, onClick, user }) {
   const Icon = item.icon;
   const active = isNavActive(item, pathname);
   const label = item.dockLabel || item.label;
   const showBadge = item.badgeKey === 'notifications' && unreadCount > 0;
+  const isProfile = item.path === '/profile';
 
   return (
     <Link
@@ -38,7 +40,11 @@ function DockNavItem({ item, pathname, unreadCount, className, onClick }) {
         />
       )}
       <span className="relative flex items-center justify-center">
-        <Icon className="h-5 w-5" />
+        {isProfile && user ? (
+          <UserAvatar user={user} size="xs" className="h-5 w-5" rounded={false} />
+        ) : (
+          <Icon className="h-5 w-5" />
+        )}
         {showBadge && (
           <span className="absolute -right-2 -top-1.5 min-w-[16px] h-4 rounded-full bg-destructive px-1 text-[9px] font-bold leading-4 text-destructive-foreground text-center">
             {formatBadgeCount(unreadCount)}
@@ -188,6 +194,7 @@ export default function BottomNav({ user, onOpenBooking, bookingModalOpen }) {
                   pathname={pathname}
                   unreadCount={unread.count}
                   className={dockItemClass}
+                  user={user}
                 />
               );
             })}

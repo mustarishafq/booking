@@ -32,6 +32,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { UserIdentity } from '@/components/UserAvatar';
 import ResourceCarePanel from '@/components/resources/ResourceCarePanel';
 import ConfirmActionDialog from '@/components/ui/ConfirmActionDialog';
 import { hasPermission } from '@/lib/permissions';
@@ -648,9 +649,15 @@ export default function ResourceFormDialog({ open, onClose, resource, user }) {
                   <SelectContent>
                     <SelectItem value="__none__">No PIC assigned</SelectItem>
                     {approvedUsers.map(u => (
-                      <SelectItem key={u.id} value={u.id}>
-                        {u.full_name?.trim() || u.email}
-                        {u.role === 'admin' ? ' · Admin' : ''}
+                      <SelectItem key={u.id} value={u.id} className="py-2">
+                        <UserIdentity
+                          user={u}
+                          labelClassName="text-sm"
+                          className="pointer-events-none"
+                        />
+                        {u.role === 'admin' ? (
+                          <span className="ml-1 text-muted-foreground">· Admin</span>
+                        ) : null}
                       </SelectItem>
                     ))}
                   </SelectContent>

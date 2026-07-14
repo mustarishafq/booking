@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import pool from './db.js';
 import { createNotification } from './notifications.js';
+import { resolveAvatarUrl } from './avatar.js';
 
 const BOOKING_STATUSES = ['confirmed', 'completed', 'pending'];
 const DATE_INTERVALS = new Set(['manual', 'days', 'months']);
@@ -546,7 +547,7 @@ export async function listTemplates() {
 
 export async function getCompletions(careItemId, limit = 20) {
   const [rows] = await pool.query(
-    `SELECT c.*, u.full_name AS completed_by_name, u.email AS completed_by_email
+    `SELECT c.*, u.full_name AS completed_by_name, u.email AS completed_by_email, u.avatar_url AS completed_by_avatar_url
      FROM resource_care_completions c
      LEFT JOIN users u ON u.id = c.completed_by_user_id
      WHERE c.care_item_id = ?
@@ -554,7 +555,10 @@ export async function getCompletions(careItemId, limit = 20) {
      LIMIT ?`,
     [careItemId, limit],
   );
-  return rows;
+  return rows.map((row) => ({
+    ...row,
+    completed_by_avatar_url: resolveAvatarUrl(row.completed_by_avatar_url),
+  }));
 }
 
 export async function getCareHistory(filters = {}) {
@@ -575,7 +579,8 @@ export async function getCareHistory(filters = {}) {
            r.resource_type,
            r.location AS resource_location,
            u.full_name AS completed_by_name,
-           u.email AS completed_by_email
+           u.email AS completed_by_email,
+           u.avatar_url AS completed_by_avatar_url
     FROM resource_care_completions c
     INNER JOIN resource_care_items ci ON ci.id = c.care_item_id
     INNER JOIN resources r ON r.id = ci.resource_id
@@ -606,7 +611,10 @@ export async function getCareHistory(filters = {}) {
   params.push(Math.min(Math.max(Number(limit) || 100, 1), 200));
 
   const [rows] = await pool.query(sql, params);
-  return rows;
+  return rows.map((row) => ({
+    ...row,
+    completed_by_avatar_url: resolveAvatarUrl(row.completed_by_avatar_url),
+  }));
 }
 
 export async function getResourceCareHistory(resourceId, limit = 100) {

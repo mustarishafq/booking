@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { format, isToday } from 'date-fns';
-import { ChevronLeft, ChevronRight, Clock, Calendar, MapPin, User, Phone, Pencil, Link2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Clock, Calendar, MapPin, Phone, Pencil, Link2 } from 'lucide-react';
+import { UserIdentity } from '@/components/UserAvatar';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -364,10 +365,13 @@ export function CalendarDayDetailContent({
             </div>
 
             {showDetails && b.booked_by_email && (
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <User className="w-3 h-3 shrink-0" />
-                <span className="truncate">{b.booked_by_name || b.booked_by_email}</span>
-              </div>
+              <UserIdentity
+                name={b.booked_by_name}
+                email={b.booked_by_email}
+                avatarUrl={b.booked_by_avatar_url}
+                className="text-xs text-muted-foreground"
+                labelClassName="text-xs text-muted-foreground"
+              />
             )}
 
             {showActions && (

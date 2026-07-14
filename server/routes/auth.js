@@ -7,6 +7,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { sendPasswordResetEmail } from '../emailer.js';
 import { getEffectivePermissions } from '../permissions.js';
 import { writeAuditLog, slimRow, entitySummary } from '../audit.js';
+import { serializeUser } from '../avatar.js';
 
 const router = Router();
 const JWT_SECRET   = process.env.JWT_SECRET;
@@ -14,8 +15,6 @@ const JWT_EXPIRES  = process.env.JWT_EXPIRES_IN || '7d';
 
 const makeToken = (user) =>
   jwt.sign({ sub: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: JWT_EXPIRES });
-
-const safeUser = ({ password_hash, ...u }) => u;
 
 // POST /api/auth/login
 router.post('/login', async (req, res) => {
@@ -32,7 +31,7 @@ router.post('/login', async (req, res) => {
 
     if (!user.approved) return res.status(403).json({ message: 'Your account is pending admin approval.', code: 'pending_approval' });
 
-    res.json({ token: makeToken(user), user: safeUser(user) });
+    res.json({ token: makeToken(user), user: serializeUser(user) });
   } catch (e) {
     res.status(500).json({ message: e.message });
   }
@@ -82,7 +81,7 @@ router.get('/me', requireAuth, async (req, res) => {
       WHERE u.id = ?
     `, [req.userId]);
     if (!rows[0]) return res.status(404).json({ message: 'User not found' });
-    const user = safeUser(rows[0]);
+    const user = serializeUser(rows[0]);
     const rp = user.role_permissions;
     const rolePermissions = !rp ? {} : typeof rp === 'string' ? JSON.parse(rp) : rp;
     user.permissions = getEffectivePermissions(user, rolePermissions);
@@ -97,7 +96,10 @@ router.get('/me', requireAuth, async (req, res) => {
 router.patch('/me', requireAuth, async (req, res) => {
   try {
     // Strip fields that must not be changed via this endpoint
-    const { password_hash, id, email, role, new_password, ...updates } = req.body;
+    const {
+      password_hash, id, email, role, role_id, approved, credit_balance_cents,
+      nexus_sso_id, avatar_url, user_type, new_password, ...updates
+    } = req.body;
 
     // Handle password change
     if (new_password) {
@@ -107,7 +109,7 @@ router.patch('/me', requireAuth, async (req, res) => {
 
     if (!Object.keys(updates).length) {
       const [rows] = await pool.query('SELECT * FROM users WHERE id = ?', [req.userId]);
-      return res.json(safeUser(rows[0]));
+      return res.json(serializeUser(rows[0]));
     }
     const [beforeRows] = await pool.query('SELECT * FROM users WHERE id = ?', [req.userId]);
     const before = beforeRows[0];
@@ -132,7 +134,7 @@ router.patch('/me', requireAuth, async (req, res) => {
       },
     }).catch(() => {});
 
-    res.json(safeUser(after));
+    res.json(serializeUser(after));
   } catch (e) {
     res.status(500).json({ message: e.message });
   }

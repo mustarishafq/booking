@@ -29,20 +29,9 @@ import { hasPermission } from '@/lib/permissions';
 import PageHeader from '@/components/layout/PageHeader';
 import EmptyState from '@/components/ui/EmptyState';
 import ConfirmActionDialog from '@/components/ui/ConfirmActionDialog';
+import UserAvatar from '@/components/UserAvatar';
 import { statColorMap } from '@/lib/bookingUtils';
 import { cn } from '@/lib/utils';
-
-function UserAvatar({ name, email, size = 'md' }) {
-  const initials = name
-    ? name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
-    : (email?.[0] || '?').toUpperCase();
-  const sz = size === 'xl' ? 'w-14 h-14 text-lg' : size === 'lg' ? 'w-10 h-10 text-sm' : 'w-8 h-8 text-xs';
-  return (
-    <div className={`${sz} rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center flex-shrink-0 ring-2 ring-primary/5`}>
-      {initials}
-    </div>
-  );
-}
 
 function StatPill({ icon: Icon, label, value, color = 'primary', className }) {
   return (
@@ -94,7 +83,7 @@ function PendingUserCard({ u, actionLoading, onApprove, onReject }) {
   return (
     <div className="rounded-2xl border border-warning/30 bg-warning/5 p-4 flex flex-col gap-3">
       <div className="flex items-start gap-3 min-w-0">
-        <UserAvatar name={u.full_name} email={u.email} size="lg" />
+        <UserAvatar user={u} size="lg" className="ring-2 ring-primary/5" />
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
             <p className="font-semibold text-sm leading-snug line-clamp-2">
@@ -142,7 +131,7 @@ function ApprovedUserCard({ u, onEdit }) {
   return (
     <div className="rounded-2xl border border-border bg-card p-4 flex flex-col gap-3 hover:border-primary/20 hover:shadow-md hover:shadow-primary/5 transition-all duration-300">
       <div className="flex items-start gap-3 min-w-0">
-        <UserAvatar name={u.full_name} email={u.email} size="lg" />
+        <UserAvatar user={u} size="lg" className="ring-2 ring-primary/5" />
         <div className="min-w-0 flex-1">
           <p className="font-semibold text-sm leading-snug line-clamp-2">
             {u.full_name || <span className="italic text-muted-foreground font-normal">No name</span>}
@@ -521,7 +510,7 @@ export default function Users() {
                       <TableRow key={u.id} className="bg-warning/5 hover:bg-warning/10">
                         <TableCell>
                           <div className="flex items-center gap-3 min-w-[200px] max-w-[280px]">
-                            <UserAvatar name={u.full_name} email={u.email} />
+                            <UserAvatar user={u} className="ring-2 ring-primary/5" />
                             <div className="min-w-0">
                               <div className="flex items-center gap-2">
                                 <p className="font-medium text-sm truncate">
@@ -558,7 +547,7 @@ export default function Users() {
                         <TableRow key={u.id} className="group">
                           <TableCell>
                             <div className="flex items-center gap-3 min-w-[200px] max-w-[280px]">
-                              <UserAvatar name={u.full_name} email={u.email} />
+                              <UserAvatar user={u} className="ring-2 ring-primary/5" />
                               <div className="min-w-0">
                                 <p className="font-medium text-sm truncate">
                                   {u.full_name || <span className="italic text-muted-foreground font-normal">No name</span>}
@@ -612,8 +601,12 @@ export default function Users() {
               </DialogHeader>
               <div className="space-y-5 py-2">
                 <div className="text-center space-y-3">
-                  <div className="w-14 h-14 rounded-full bg-success/10 flex items-center justify-center mx-auto">
-                    <CheckCircle2 className="w-7 h-7 text-success" />
+                  <div className="flex justify-center">
+                    <UserAvatar
+                      user={addResult.user}
+                      size="xl"
+                      className="ring-2 ring-success/20"
+                    />
                   </div>
                   <div>
                     <p className="font-semibold text-foreground">
@@ -803,7 +796,7 @@ export default function Users() {
         <DialogContent className="w-[calc(100%-2rem)] max-w-sm sm:max-w-md max-h-[min(90dvh,640px)] overflow-y-auto">
           <DialogHeader>
             <div className="flex items-center gap-3 pb-1">
-              <UserAvatar name={editUser?.full_name} email={editUser?.email} size="xl" />
+              <UserAvatar user={editUser} size="xl" className="ring-2 ring-primary/5" />
               <div className="min-w-0">
                 <DialogTitle className="text-base leading-snug truncate">{editUser?.full_name || 'Unnamed User'}</DialogTitle>
                 <p className="text-xs text-muted-foreground mt-0.5 truncate">{editUser?.email}</p>

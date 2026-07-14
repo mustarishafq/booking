@@ -11,19 +11,8 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { User, KeyRound, LogOut, Mail, Phone, Shield, Eye, EyeOff } from 'lucide-react';
 import PageHeader from '@/components/layout/PageHeader';
+import UserAvatar from '@/components/UserAvatar';
 import { cn } from '@/lib/utils';
-
-function ProfileAvatar({ name, email }) {
-  const initials = name
-    ? name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
-    : (email?.[0] || 'U').toUpperCase();
-
-  return (
-    <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-primary/10 text-primary font-bold text-xl sm:text-2xl flex items-center justify-center shrink-0 ring-2 ring-primary/10">
-      {initials}
-    </div>
-  );
-}
 
 function FieldGroup({ label, hint, children }) {
   return (
@@ -121,7 +110,11 @@ export default function Profile() {
         <Card className="rounded-2xl border border-border overflow-hidden">
           <div className="relative px-4 py-6 sm:px-6 sm:py-8 bg-gradient-to-br from-primary/8 via-primary/4 to-transparent border-b border-border">
             <div className="flex items-center gap-4 sm:gap-5">
-              <ProfileAvatar name={user?.full_name} email={user?.email} />
+              <UserAvatar
+                user={user}
+                size="profile"
+                className="ring-2 ring-primary/10"
+              />
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className="text-lg sm:text-xl font-semibold tracking-tight truncate">{displayName}</h2>

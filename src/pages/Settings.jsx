@@ -23,6 +23,7 @@ import {
 import PageHeader from '@/components/layout/PageHeader';
 import EmptyState from '@/components/ui/EmptyState';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { UserIdentity } from '@/components/UserAvatar';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import CareTemplatesSettings from '@/components/settings/CareTemplatesSettings';
@@ -1223,10 +1224,21 @@ function AuditLogViewer({ refreshKey = 0 }) {
                 </div>
                 <span className="text-xs text-muted-foreground shrink-0">{formatAuditTime(log.created_at)}</span>
               </div>
-              <p className="text-xs text-muted-foreground">
-                By {log.actor_email || 'system'}
-                {log.ip_address ? ` · ${log.ip_address}` : ''}
-              </p>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span className="shrink-0">By</span>
+                {log.actor_email ? (
+                  <UserIdentity
+                    email={log.actor_email}
+                    name={log.actor_name || log.actor_email}
+                    avatarUrl={log.actor_avatar_url}
+                    className="min-w-0"
+                    labelClassName="text-xs text-muted-foreground"
+                  />
+                ) : (
+                  <span>system</span>
+                )}
+                {log.ip_address ? <span className="shrink-0">· {log.ip_address}</span> : null}
+              </div>
             </div>
           ))}
         </div>

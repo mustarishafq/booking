@@ -8,13 +8,16 @@ import { sanitizeSsoRedirect } from '../ssoRedirect.js';
 import { rateLimit } from '../rateLimit.js';
 import { getEffectivePermissions } from '../permissions.js';
 import { writeAuditLog, slimRow, entitySummary } from '../audit.js';
+import {
+  extractProfilePictureClaim,
+  syncProfilePicture,
+  serializeUser,
+} from '../avatar.js';
 
 const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRES = process.env.JWT_EXPIRES_IN || '7d';
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
-
-const safeUser = ({ password_hash, ...u }) => u;
 
 const makeToken = (user) =>
   jwt.sign({ sub: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: JWT_EXPIRES });
@@ -61,8 +64,8 @@ async function enrichUser(user) {
     LEFT JOIN roles r ON u.role_id = r.id
     WHERE u.id = ?
   `, [user.id]);
-  if (!rows[0]) return safeUser(user);
-  const enriched = safeUser(rows[0]);
+  if (!rows[0]) return serializeUser(user);
+  const enriched = serializeUser(rows[0]);
   const rp = enriched.role_permissions;
   const rolePermissions = !rp ? {} : typeof rp === 'string' ? JSON.parse(rp) : rp;
   enriched.permissions = getEffectivePermissions(enriched, rolePermissions);
@@ -97,6 +100,11 @@ router.post('/nexus/verify', async (req, res) => {
     const email = payload.email.toLowerCase();
     const name = payload.name || payload.email;
 
+    const pictureClaim = extractProfilePictureClaim(payload);
+    const avatarUrl = pictureClaim
+      ? await syncProfilePicture(pictureClaim, config.issuer || payload.iss || '')
+      : '';
+
     let user = null;
 
     const [bySso] = await pool.query('SELECT * FROM users WHERE nexus_sso_id = ?', [nexusId]);
@@ -111,10 +119,18 @@ router.post('/nexus/verify', async (req, res) => {
       if (!user.approved) {
         return res.status(403).json({ message: 'User account is not active.' });
       }
-      await pool.query(
-        'UPDATE users SET nexus_sso_id = ?, full_name = ?, email = ? WHERE id = ?',
-        [nexusId, name, email, user.id],
-      );
+      // Only overwrite avatar_url when sync produced a value — never clear on missing claim
+      if (avatarUrl) {
+        await pool.query(
+          'UPDATE users SET nexus_sso_id = ?, full_name = ?, email = ?, avatar_url = ? WHERE id = ?',
+          [nexusId, name, email, avatarUrl, user.id],
+        );
+      } else {
+        await pool.query(
+          'UPDATE users SET nexus_sso_id = ?, full_name = ?, email = ? WHERE id = ?',
+          [nexusId, name, email, user.id],
+        );
+      }
       const [rows] = await pool.query('SELECT * FROM users WHERE id = ?', [user.id]);
       user = rows[0];
 
@@ -133,9 +149,9 @@ router.post('/nexus/verify', async (req, res) => {
       const id = randomUUID();
       const hash = await bcrypt.hash(randomBytes(32).toString('hex'), 12);
       await pool.query(
-        `INSERT INTO users (id, email, full_name, role, role_id, user_type, credit_balance_cents, password_hash, approved, nexus_sso_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [id, email, name, role, role_id, 'internal', 0, hash, 1, nexusId],
+        `INSERT INTO users (id, email, full_name, role, role_id, user_type, credit_balance_cents, password_hash, approved, nexus_sso_id, avatar_url)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [id, email, name, role, role_id, 'internal', 0, hash, 1, nexusId, avatarUrl || null],
       );
       const [rows] = await pool.query('SELECT * FROM users WHERE id = ?', [id]);
       user = rows[0];

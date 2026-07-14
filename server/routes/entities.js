@@ -14,6 +14,7 @@ import {
   sendBookingWebhook,
 } from '../webhooks.js';
 import { writeAuditLog, slimRow, entitySummary } from '../audit.js';
+import { resolveAvatarUrl } from '../avatar.js';
 
 // Fields that are stored as JSON strings in MySQL
 const JSON_FIELDS = {
@@ -85,7 +86,7 @@ const enrichResourceRows = async (rows) => {
   if (userIds.length) {
     const placeholders = userIds.map(() => '?').join(', ');
     const [users] = await pool.query(
-      `SELECT id, email, full_name FROM users WHERE id IN (${placeholders})`,
+      `SELECT id, email, full_name, avatar_url FROM users WHERE id IN (${placeholders})`,
       userIds,
     );
     userById = Object.fromEntries(users.map(u => [u.id, u]));
@@ -98,8 +99,33 @@ const enrichResourceRows = async (rows) => {
       ...r,
       pic_email: pic?.email || null,
       pic_name,
+      pic_avatar_url: resolveAvatarUrl(pic?.avatar_url),
     };
   });
+};
+
+const enrichBookingRows = async (rows) => {
+  const parsed = rows.map(r => parseRow('bookings', r));
+  const emails = [...new Set(
+    parsed.map(r => (r.booked_by_email || '').toLowerCase()).filter(Boolean),
+  )];
+
+  let avatarByEmail = {};
+  if (emails.length) {
+    const placeholders = emails.map(() => '?').join(', ');
+    const [users] = await pool.query(
+      `SELECT email, avatar_url FROM users WHERE email IN (${placeholders})`,
+      emails,
+    );
+    avatarByEmail = Object.fromEntries(
+      users.map(u => [String(u.email).toLowerCase(), resolveAvatarUrl(u.avatar_url)]),
+    );
+  }
+
+  return parsed.map(r => ({
+    ...r,
+    booked_by_avatar_url: avatarByEmail[(r.booked_by_email || '').toLowerCase()] || null,
+  }));
 };
 
 const enrichResourceRowsWithCare = async (rows) => {
@@ -137,6 +163,9 @@ export const createEntityRouter = (table) => {
       const [rows] = await pool.query(sql, params);
       if (table === 'resources') {
         return res.json(await enrichResourceRowsWithCare(rows));
+      }
+      if (table === 'bookings') {
+        return res.json(await enrichBookingRows(rows));
       }
       res.json(rows.map(r => parseRow(table, r)));
     } catch (e) {
@@ -231,6 +260,10 @@ export const createEntityRouter = (table) => {
         applyTemplateToResource(raw.id, raw.resource_type).catch(() => {});
         return res.status(201).json(enriched);
       }
+      if (table === 'bookings') {
+        const [enriched] = await enrichBookingRows(rows);
+        return res.status(201).json(enriched);
+      }
       res.status(201).json(created);
     } catch (e) {
       const clientError = table === 'bookings' && (
@@ -247,6 +280,10 @@ export const createEntityRouter = (table) => {
       if (!rows[0]) return res.status(404).json({ message: 'Not found' });
       if (table === 'resources') {
         const [enriched] = await enrichResourceRowsWithCare(rows);
+        return res.json(enriched);
+      }
+      if (table === 'bookings') {
+        const [enriched] = await enrichBookingRows(rows);
         return res.json(enriched);
       }
       res.json(parseRow(table, rows[0]));
@@ -271,6 +308,9 @@ export const createEntityRouter = (table) => {
 
       if (table === 'resources') {
         [updated] = await enrichResourceRowsWithCare(rows);
+      }
+      if (table === 'bookings') {
+        [updated] = await enrichBookingRows(rows);
       }
 
       // Fire notifications on booking status changes

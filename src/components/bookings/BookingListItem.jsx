@@ -2,10 +2,11 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { format, isToday, isTomorrow, isSameDay } from 'date-fns';
 import {
-  Ban, CheckCircle2, Link2, Pencil, Phone, Repeat, User, XCircle,
+  Ban, CheckCircle2, Link2, Pencil, Phone, Repeat, XCircle,
 } from 'lucide-react';
 import { bookingStatusBadge, getBookingPhone, isBookingEditable, phoneTelHref } from '@/lib/bookingUtils';
 import { getResourceTypeIcon } from '@/lib/resourceVisuals';
+import { UserIdentity } from '@/components/UserAvatar';
 import { cn } from '@/lib/utils';
 
 const statusAccent = {
@@ -136,8 +137,13 @@ export default function BookingListItem({
               <div className="flex flex-wrap items-center gap-2">
                 {showBooker && (
                   <span className="inline-flex items-center gap-1.5 rounded-lg bg-muted/80 px-2 py-1 text-xs text-muted-foreground max-w-full">
-                    <User className="w-3.5 h-3.5 shrink-0 text-primary/70" />
-                    <span className="truncate">{booking.booked_by_name || booking.booked_by_email || '—'}</span>
+                    <UserIdentity
+                      name={booking.booked_by_name}
+                      email={booking.booked_by_email}
+                      avatarUrl={booking.booked_by_avatar_url}
+                      className="max-w-full"
+                      labelClassName="text-xs text-muted-foreground"
+                    />
                   </span>
                 )}
                 {booking.is_recurring && (

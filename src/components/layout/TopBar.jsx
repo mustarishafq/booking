@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { CreditCard, User, LogOut, Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import GlobalSearch from './GlobalSearch';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import UserAvatar from '@/components/UserAvatar';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,9 +27,6 @@ export default function TopBar({ user, embedded = false }) {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const isMobile = useIsMobile();
   const { data: unread = { count: 0 } } = useUnreadNotificationCount(!!user && !isMobile);
-  const initials = user?.full_name
-    ? user.full_name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
-    : (user?.email?.[0] || 'U').toUpperCase();
 
   return (
     <header
@@ -84,11 +81,7 @@ export default function TopBar({ user, embedded = false }) {
                         className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-muted h-auto transition-colors"
                         aria-label="Account menu"
                       >
-                        <Avatar className="h-8 w-8 rounded-lg">
-                          <AvatarFallback className="rounded-lg bg-primary/10 text-sm font-semibold text-primary">
-                            {initials}
-                          </AvatarFallback>
-                        </Avatar>
+                        <UserAvatar user={user} size="sm" rounded={false} />
                         <div className="hidden md:flex flex-col items-start text-left">
                           <span className="text-sm font-medium leading-none">{user.full_name || user.email}</span>
                           <span className="text-xs text-muted-foreground capitalize">{user.role}</span>

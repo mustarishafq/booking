@@ -20,6 +20,7 @@ import { bookingOverlapsRange } from '@/lib/calendarUtils';
 import EmptyState from '@/components/ui/EmptyState';
 import BookingListItem from '@/components/bookings/BookingListItem';
 import ConfirmActionDialog from '@/components/ui/ConfirmActionDialog';
+import { UserIdentity } from '@/components/UserAvatar';
 import { cn } from '@/lib/utils';
 
 const HISTORY_STATUSES = new Set(['completed', 'cancelled', 'rejected']);
@@ -187,12 +188,15 @@ export default function Bookings() {
     const map = new Map();
     bookings.forEach(b => {
       if (b.booked_by_email) {
-        map.set(b.booked_by_email, b.booked_by_name || b.booked_by_email);
+        const existing = map.get(b.booked_by_email);
+        map.set(b.booked_by_email, {
+          email: b.booked_by_email,
+          name: b.booked_by_name || existing?.name || b.booked_by_email,
+          avatar_url: b.booked_by_avatar_url || existing?.avatar_url || null,
+        });
       }
     });
-    return [...map.entries()]
-      .map(([email, name]) => ({ email, name }))
-      .sort((a, b) => a.name.localeCompare(b.name));
+    return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
   }, [bookings]);
 
   const visibleBookings = useMemo(
@@ -414,8 +418,14 @@ export default function Bookings() {
               <SelectContent>
                 <SelectItem value="all">All users</SelectItem>
                 {bookers.map(b => (
-                  <SelectItem key={b.email} value={b.email}>
-                    {b.name}
+                  <SelectItem key={b.email} value={b.email} className="py-2">
+                    <UserIdentity
+                      name={b.name}
+                      email={b.email}
+                      avatarUrl={b.avatar_url}
+                      labelClassName="text-sm"
+                      className="pointer-events-none"
+                    />
                   </SelectItem>
                 ))}
               </SelectContent>

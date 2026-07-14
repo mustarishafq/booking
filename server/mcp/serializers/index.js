@@ -44,6 +44,7 @@ export function serializeResource(row) {
     pic_user_id: row.pic_user_id,
     pic_email: row.pic_email || null,
     pic_name: row.pic_name || null,
+    pic_avatar_url: row.pic_avatar_url || null,
     status: row.status,
     location: row.location,
     phone: row.phone || null,

@@ -3,9 +3,10 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { format, isSameDay } from 'date-fns';
-import { Clock, MapPin, User, ArrowRight } from 'lucide-react';
+import { Clock, MapPin, ArrowRight } from 'lucide-react';
 import { bookingStatusBadge } from '@/lib/bookingUtils';
 import EmptyState from '@/components/ui/EmptyState';
+import { UserIdentity } from '@/components/UserAvatar';
 import { cn } from '@/lib/utils';
 
 function bookingDateLabel(booking) {
@@ -62,13 +63,16 @@ export default function RecentBookings({
                       <span className="text-xs text-muted-foreground">
                         {bookingDateLabel(booking)}
                       </span>
-                      {showBooker && booking.booked_by_name && (
+                      {showBooker && (booking.booked_by_name || booking.booked_by_email) && (
                         <>
                           <span className="text-xs text-muted-foreground hidden sm:inline">·</span>
-                          <span className="text-xs text-muted-foreground flex items-center gap-1 truncate max-w-full sm:max-w-[140px]">
-                            <User className="w-3 h-3 shrink-0" />
-                            {booking.booked_by_name}
-                          </span>
+                          <UserIdentity
+                            name={booking.booked_by_name}
+                            email={booking.booked_by_email}
+                            avatarUrl={booking.booked_by_avatar_url}
+                            className="text-xs text-muted-foreground max-w-full sm:max-w-[160px]"
+                            labelClassName="text-xs text-muted-foreground"
+                          />
                         </>
                       )}
                     </div>

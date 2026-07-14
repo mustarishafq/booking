@@ -4,8 +4,9 @@ import { Badge } from '@/components/ui/badge';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
-import { MapPin, User, CheckCircle2, Calendar } from 'lucide-react';
+import { MapPin, CheckCircle2, Calendar } from 'lucide-react';
 import { careCategoryLabel, formatCareCompletedAt } from '@/lib/resourceCareUtils';
+import { UserIdentity } from '@/components/UserAvatar';
 import { cn } from '@/lib/utils';
 
 export default function CareHistoryProofDialog({ entry, onClose }) {
@@ -45,10 +46,13 @@ export default function CareHistoryProofDialog({ entry, onClose }) {
             <span>{formatCareCompletedAt(entry?.completed_at)}</span>
           </div>
           {completedBy && (
-            <div className="flex items-center gap-1.5 text-muted-foreground min-w-0">
-              <User className="w-3.5 h-3.5 shrink-0" />
-              <span className="truncate">{completedBy}</span>
-            </div>
+            <UserIdentity
+              name={entry?.completed_by_name}
+              email={entry?.completed_by_email}
+              avatarUrl={entry?.completed_by_avatar_url}
+              className="text-muted-foreground min-w-0"
+              labelClassName="text-sm text-muted-foreground"
+            />
           )}
         </div>
 

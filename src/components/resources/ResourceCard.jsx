@@ -3,10 +3,11 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
-  Users, MapPin, Pencil, ShieldCheck, UserRound, Wrench, Link2, Phone, Zap, CalendarDays,
+  Users, MapPin, Pencil, ShieldCheck, Wrench, Link2, Phone, Zap, CalendarDays,
 } from 'lucide-react';
 import { resourceStatusBadge, getPairWithTypes } from '@/lib/bookingUtils';
 import { getResourceTypeIcon, getResourceExp } from '@/lib/resourceVisuals';
+import { UserIdentity } from '@/components/UserAvatar';
 import { cn } from '@/lib/utils';
 
 const pricingLabel = { hourly: '/hr', daily: '/day', flat: ' flat' };
@@ -86,11 +87,15 @@ function PicDisplay({ resource, className, compact = false }) {
 
   return (
     <span
-      className={cn('flex items-center gap-1 min-w-0', className)}
+      className={cn('min-w-0', className)}
       title={resource.pic_email && resource.pic_name ? resource.pic_email : undefined}
     >
-      <UserRound className={cn('shrink-0', compact ? 'w-3 h-3' : 'w-3.5 h-3.5')} />
-      <span className="truncate">{label}</span>
+      <UserIdentity
+        name={resource.pic_name}
+        email={resource.pic_email}
+        avatarUrl={resource.pic_avatar_url}
+        labelClassName={cn(compact ? 'text-xs' : 'text-sm')}
+      />
     </span>
   );
 }
