@@ -9,11 +9,11 @@ import { motion } from 'framer-motion';
 
 import {
   LayoutDashboard, LayoutGrid, BookOpen, CreditCard,
-  CalendarCheck, Clock, Users, Plus,
+  CalendarCheck, Clock, Users, Plus, Zap,
 } from 'lucide-react';
 import PageHeader from '@/components/layout/PageHeader';
 import StatCard from '@/components/dashboard/StatCard';
-import RecentBookings from '@/components/dashboard/RecentBookings';
+import TopXpLeaderboard from '@/components/dashboard/TopXpLeaderboard';
 import BookingChart from '@/components/dashboard/BookingChart';
 import DashboardAlerts from '@/components/dashboard/DashboardAlerts';
 import DashboardQuickActions from '@/components/dashboard/DashboardQuickActions';
@@ -33,6 +33,7 @@ import {
   buildQuickActions,
   getListBookings,
 } from '@/lib/dashboardUtils';
+import { buildTopXpUsers } from '@/lib/resourceVisuals';
 
 const STAT_ICONS = {
   LayoutGrid,
@@ -41,6 +42,7 @@ const STAT_ICONS = {
   CalendarCheck,
   Clock,
   Users,
+  Zap,
 };
 
 const STAT_GRID = {
@@ -114,7 +116,12 @@ export default function Dashboard() {
     [bookings, user],
   );
 
-  const skeletonCount = adminView ? 4 : 3;
+  const topXpUsers = useMemo(
+    () => buildTopXpUsers(bookings, { limit: 5 }),
+    [bookings],
+  );
+
+  const skeletonCount = 4;
 
   if (bookingsLoading) {
     return (
@@ -176,13 +183,9 @@ export default function Dashboard() {
           />
         </div>
         <div className="lg:col-span-5 xl:col-span-4 min-w-0">
-          <RecentBookings
-            bookings={listBookings}
-            title={meta.listTitle}
-            emptyTitle={meta.listEmptyTitle}
-            emptyDescription={meta.listEmptyDescription}
-            showBooker={adminView}
-            viewAllHref="/bookings"
+          <TopXpLeaderboard
+            users={topXpUsers}
+            currentUserEmail={user?.email}
           />
         </div>
       </motion.div>

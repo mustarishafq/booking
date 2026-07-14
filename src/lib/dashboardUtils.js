@@ -6,6 +6,7 @@ import {
   showUserCredits,
 } from '@/lib/permissions';
 import { bookingOverlapsRange } from '@/lib/calendarUtils';
+import { buildUserBookingCounts, getUserExp } from '@/lib/resourceVisuals';
 
 const HISTORY_STATUSES = new Set(['completed', 'cancelled', 'rejected']);
 
@@ -63,11 +64,6 @@ export function getDashboardMeta(user) {
       mode: internal ? 'internal-admin' : 'admin',
       chartTitle: 'Booking Activity',
       chartDescription: 'New bookings over the last 7 days',
-      listTitle: internal ? 'Needs Attention' : 'Recent Activity',
-      listEmptyTitle: 'All clear',
-      listEmptyDescription: internal
-        ? 'No pending bookings or approvals right now.'
-        : 'No recent bookings to show.',
     };
   }
 
@@ -75,11 +71,6 @@ export function getDashboardMeta(user) {
     mode: internal ? 'internal-user' : 'user',
     chartTitle: 'Your Activity',
     chartDescription: 'Your bookings over the last 7 days',
-    listTitle: 'Upcoming',
-    listEmptyTitle: 'No upcoming bookings',
-    listEmptyDescription: internal
-      ? 'Browse resources and book a room when you need one.'
-      : 'Book a resource to get started.',
   };
 }
 
@@ -196,6 +187,10 @@ export function buildDashboardStats({
   }
 
   // Personal user dashboard
+  const userEmail = String(user?.email || '').toLowerCase();
+  const userBookingCount = buildUserBookingCounts(bookings)[userEmail]?.bookingCount || 0;
+  const userXp = getUserExp(userBookingCount);
+
   const items = [
     {
       key: 'upcoming',
@@ -214,12 +209,12 @@ export function buildDashboardStats({
       subtitle: `${scoped.length} total`,
     },
     {
-      key: 'resources',
-      title: 'Resources',
-      value: activeResources,
-      icon: 'LayoutGrid',
-      color: 'success',
-      subtitle: 'Available to book',
+      key: 'xp',
+      title: 'Your XP',
+      value: userXp.exp,
+      icon: 'Zap',
+      color: 'warning',
+      subtitle: `Level ${userXp.level} · ${userXp.bookingCount} booking${userXp.bookingCount === 1 ? '' : 's'}`,
     },
   ];
 
@@ -229,8 +224,17 @@ export function buildDashboardStats({
       title: 'Credit Balance',
       value: `RM${((user?.credit_balance_cents || 0) / 100).toFixed(2)}`,
       icon: 'CreditCard',
-      color: 'warning',
+      color: 'success',
       subtitle: 'Available to spend',
+    });
+  } else {
+    items.push({
+      key: 'resources',
+      title: 'Resources',
+      value: activeResources,
+      icon: 'LayoutGrid',
+      color: 'success',
+      subtitle: 'Available to book',
     });
   }
 

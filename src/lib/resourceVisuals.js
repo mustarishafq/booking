@@ -55,3 +55,43 @@ export function getResourceExp(bookingCount = 0) {
   const progress = intoLevel / EXP_PER_LEVEL;
   return { bookingCount: count, exp, level, intoLevel, progress };
 }
+
+/** Same leveling rules as resources — users earn XP from bookings. */
+export const getUserExp = getResourceExp;
+
+/**
+ * Aggregate booking counts per booker email (excludes cancelled / rejected).
+ * Returns a map keyed by lowercased email.
+ */
+export function buildUserBookingCounts(bookings = []) {
+  const byEmail = {};
+  for (const b of bookings) {
+    const email = String(b?.booked_by_email || '').toLowerCase().trim();
+    if (!email) continue;
+    if (!EXP_BOOKING_STATUSES.has(b.status)) continue;
+
+    if (!byEmail[email]) {
+      byEmail[email] = {
+        email,
+        name: b.booked_by_name || email,
+        avatar_url: b.booked_by_avatar_url || null,
+        bookingCount: 0,
+      };
+    }
+
+    byEmail[email].bookingCount += 1;
+    if (b.booked_by_name) byEmail[email].name = b.booked_by_name;
+    if (b.booked_by_avatar_url) byEmail[email].avatar_url = b.booked_by_avatar_url;
+  }
+  return byEmail;
+}
+
+/**
+ * Rank users by XP derived from booking counts.
+ */
+export function buildTopXpUsers(bookings = [], { limit = 5 } = {}) {
+  return Object.values(buildUserBookingCounts(bookings))
+    .map((u) => ({ ...u, ...getUserExp(u.bookingCount) }))
+    .sort((a, b) => b.exp - a.exp || String(a.name || '').localeCompare(String(b.name || '')))
+    .slice(0, Math.max(0, limit));
+}

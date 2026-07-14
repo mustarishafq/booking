@@ -1,8 +1,8 @@
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { format, subDays, startOfDay, isAfter, isBefore, addDays } from 'date-fns';
 import EmptyState from '@/components/ui/EmptyState';
-import { BarChart3 } from 'lucide-react';
+import { Activity } from 'lucide-react';
 
 export default function BookingChart({
   bookings,
@@ -31,7 +31,7 @@ export default function BookingChart({
       <CardContent className="px-4 sm:px-6 pb-4 sm:pb-6">
         {total === 0 ? (
           <EmptyState
-            icon={BarChart3}
+            icon={Activity}
             title="No activity yet"
             description="Booking activity will appear here once reservations are made."
             className="py-12"
@@ -39,7 +39,7 @@ export default function BookingChart({
         ) : (
           <div className="h-48 sm:h-56 lg:h-64 -mx-1 sm:mx-0">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={last7Days} margin={{ top: 4, right: 4, left: -16, bottom: 0 }}>
+              <LineChart data={last7Days} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                 <XAxis
                   dataKey="day"
@@ -55,7 +55,7 @@ export default function BookingChart({
                   width={28}
                 />
                 <Tooltip
-                  cursor={{ fill: 'hsl(var(--primary) / 0.2)' }}
+                  cursor={{ stroke: 'hsl(var(--primary) / 0.35)', strokeWidth: 1 }}
                   contentStyle={{
                     background: 'hsl(var(--card))',
                     border: '1px solid hsl(var(--border))',
@@ -66,13 +66,25 @@ export default function BookingChart({
                   labelStyle={{ color: 'hsl(var(--foreground))' }}
                   itemStyle={{ color: 'hsl(var(--primary))' }}
                 />
-                <Bar
+                <Line
+                  type="monotone"
                   dataKey="bookings"
-                  fill="hsl(var(--primary))"
-                  radius={[6, 6, 0, 0]}
-                  activeBar={{ fill: 'hsl(var(--primary))', opacity: 1 }}
+                  stroke="hsl(var(--primary))"
+                  strokeWidth={2.5}
+                  dot={{
+                    r: 4,
+                    fill: 'hsl(var(--primary))',
+                    stroke: 'hsl(var(--card))',
+                    strokeWidth: 2,
+                  }}
+                  activeDot={{
+                    r: 6,
+                    fill: 'hsl(var(--primary))',
+                    stroke: 'hsl(var(--card))',
+                    strokeWidth: 2,
+                  }}
                 />
-              </BarChart>
+              </LineChart>
             </ResponsiveContainer>
           </div>
         )}
