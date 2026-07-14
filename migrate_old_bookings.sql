@@ -10,7 +10,7 @@
 --   - Closed/missing rooms: create resources with status=inactive
 -- =====================================================================
 
-USE `booking`;
+USE `nexus_booking`;
 
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
